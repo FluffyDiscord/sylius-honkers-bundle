@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
 use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
 use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotDataSourceInterface;
 use FluffyDiscord\SyliusChatbotBundle\Contract\ProductIndexabilityInterface;
 use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
@@ -18,6 +19,7 @@ use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDocument;
 use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
 use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
+use FluffyDiscord\SyliusChatbotBundle\Exception\AmbiguousChannelTaxonTreeException;
 use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
@@ -26,8 +28,6 @@ use Sylius\Component\Core\Repository\ProductRepositoryInterface;
 use Sylius\Component\Taxonomy\Model\TaxonInterface;
 use Sylius\Component\Taxonomy\Repository\TaxonRepositoryInterface;
 use Sylius\Resource\Model\TimestampableInterface;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Symfony\Component\Routing\RouterInterface;
 
 readonly class CategoriesDataSource implements ChatbotDataSourceInterface
 {
@@ -38,7 +38,7 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
         private ChannelResolver              $channelResolver,
         private CursorCodec                  $cursorCodec,
         private HtmlToText                   $htmlToText,
-        private RouterInterface              $router,
+        private ChannelUrlGenerator          $channelUrlGenerator,
         private LoggerInterface              $logger,
     ) {
     }
@@ -72,7 +72,9 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
             ->setParameter('enabled', true)
             ->orderBy('taxon.id', Criteria::ASC);
 
-        $this->restrictToChannelTree($queryBuilder, $channel);
+        $taxonClassName = $repository->getClassName();
+        $ancestorBound = $this->restrictToChannelTree($queryBuilder, $repository, $channel);
+        $this->excludeDisabledBranches($queryBuilder, $taxonClassName, $ancestorBound);
 
         if ($isIdLookup) {
             $queryBuilder->andWhere('taxon.code IN (:codes)')->setParameter('codes', $query->ids);
@@ -85,7 +87,7 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
         }
 
         $taxons = $queryBuilder->getQuery()->getResult();
-        $productCounts = $this->countProductsByTaxonCode($taxons, $channel, $repository->getClassName());
+        $productCounts = $this->countProductsByTaxonCode($taxons, $channel, $taxonClassName);
 
         $documents = [];
         $lastFetchedId = null;
@@ -93,7 +95,7 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
             $lastFetchedId = $taxon->getId();
             $productCount = $productCounts[(string) $taxon->getCode()] ?? 0;
             try {
-                $document = $this->buildDocument($taxon, $locale, $productCount);
+                $document = $this->buildDocument($taxon, $channel, $locale, $productCount);
             } catch (\RuntimeException $exception) {
                 $this->logger->error('Chatbot: building a category document failed, skipping it.', [
                     'taxon' => $taxon->getCode(),
@@ -130,22 +132,88 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
         return 'sylius_shop_product_index';
     }
 
-    private function restrictToChannelTree(QueryBuilder $queryBuilder, ChannelInterface $channel): void
-    {
+    private function restrictToChannelTree(
+        QueryBuilder $queryBuilder,
+        EntityRepository $repository,
+        ChannelInterface $channel,
+    ): string {
         $menuTaxon = $channel->getMenuTaxon();
-        if (!$menuTaxon instanceof TaxonInterface) {
-            $queryBuilder->andWhere('taxon.parent IS NOT NULL');
+        if ($menuTaxon instanceof TaxonInterface) {
+            $queryBuilder
+                ->andWhere('taxon.root = :treeRoot')
+                ->andWhere('taxon.left >= :treeLeft')
+                ->andWhere('taxon.right <= :treeRight')
+                ->setParameter('treeRoot', $menuTaxon->getRoot())
+                ->setParameter('treeLeft', $menuTaxon->getLeft())
+                ->setParameter('treeRight', $menuTaxon->getRight());
 
-            return;
+            return 'disabledAncestor.left > :treeLeft AND disabledAncestor.right <= :treeRight';
+        }
+
+        $treeRoots = $this->findTreeRoots($repository);
+        $treeCount = count($treeRoots);
+
+        if ($treeCount >= $this->getAmbiguityProbeSize()) {
+            throw new AmbiguousChannelTaxonTreeException($channel->getCode());
+        }
+
+        if ($treeCount === 0) {
+            $this->excludeEveryTaxon($queryBuilder);
+
+            return 'disabledAncestor.parent IS NOT NULL';
         }
 
         $queryBuilder
+            ->andWhere('taxon.parent IS NOT NULL')
             ->andWhere('taxon.root = :treeRoot')
-            ->andWhere('taxon.left >= :treeLeft')
-            ->andWhere('taxon.right <= :treeRight')
-            ->setParameter('treeRoot', $menuTaxon->getRoot())
-            ->setParameter('treeLeft', $menuTaxon->getLeft())
-            ->setParameter('treeRight', $menuTaxon->getRight());
+            ->setParameter('treeRoot', $treeRoots[0]);
+
+        return 'disabledAncestor.parent IS NOT NULL';
+    }
+
+    private function excludeEveryTaxon(QueryBuilder $queryBuilder): void
+    {
+        $queryBuilder->andWhere('taxon.id IS NULL');
+    }
+
+    /**
+     * @return list<TaxonInterface>
+     */
+    private function findTreeRoots(EntityRepository $repository): array
+    {
+        return $repository->createQueryBuilder('taxon')
+            ->andWhere('taxon.parent IS NULL')
+            ->setMaxResults($this->getAmbiguityProbeSize())
+            ->getQuery()
+            ->getResult();
+    }
+
+    private function getAmbiguityProbeSize(): int
+    {
+        return 2;
+    }
+
+    private function excludeDisabledBranches(
+        QueryBuilder $queryBuilder,
+        string $taxonClassName,
+        string $ancestorBound,
+    ): void {
+        $queryBuilder
+            ->andWhere(sprintf(
+                'NOT EXISTS (SELECT disabledAncestor.id FROM %s disabledAncestor WHERE %s)',
+                $taxonClassName,
+                $this->getDisabledAncestorCondition($ancestorBound),
+            ))
+            ->setParameter('ancestorEnabled', false);
+    }
+
+    private function getDisabledAncestorCondition(string $ancestorBound): string
+    {
+        return 'disabledAncestor.enabled = :ancestorEnabled'
+            . ' AND disabledAncestor.root = taxon.root'
+            . ' AND disabledAncestor.left < taxon.left'
+            . ' AND disabledAncestor.right > taxon.right'
+            . ' AND ' . $ancestorBound;
     }
 
     private function getSubtreeContainmentCondition(): string
@@ -253,8 +321,12 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
         return false;
     }
 
-    private function buildDocument(TaxonInterface $taxon, string $locale, int $productCount): ?SourceDocument
-    {
+    private function buildDocument(
+        TaxonInterface $taxon,
+        ChannelInterface $channel,
+        string $locale,
+        int $productCount,
+    ): ?SourceDocument {
         $code = $taxon->getCode();
         $translation = $taxon->getTranslation($locale);
         $name = $translation->getName();
@@ -263,10 +335,10 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
             return null;
         }
 
-        $url = $this->router->generate(
+        $url = $this->channelUrlGenerator->generate(
+            $channel,
             $this->getTaxonRouteName(),
             ['slug' => $slug, '_locale' => $locale],
-            UrlGeneratorInterface::ABSOLUTE_URL,
         );
 
         $path = $this->buildPath($taxon, $locale);

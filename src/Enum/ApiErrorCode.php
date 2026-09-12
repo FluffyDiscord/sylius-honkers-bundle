@@ -13,6 +13,7 @@ enum ApiErrorCode: string
     case InvalidCursor = 'invalid_cursor';
     case InvalidLocale = 'invalid_locale';
     case InvalidChannel = 'invalid_channel';
+    case AmbiguousTaxonTree = 'ambiguous_taxon_tree';
     case BadRequest = 'bad_request';
     case NotFound = 'not_found';
     case MethodNotAllowed = 'method_not_allowed';

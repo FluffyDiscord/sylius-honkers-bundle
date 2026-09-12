@@ -12,6 +12,7 @@ use MonsieurBiz\SyliusCmsPagePlugin\Entity\PageInterface;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\PageTranslationInterface;
 use MonsieurBiz\SyliusCmsPagePlugin\Repository\PageRepository;
 use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
 use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
 use FluffyDiscord\SyliusChatbotBundle\DataSource\CmsPagesDataSource;
 use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
@@ -22,6 +23,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\RouterInterface;
 
 class CmsPagesDataSourceTest extends TestCase
@@ -33,6 +35,7 @@ class CmsPagesDataSourceTest extends TestCase
         RouterInterface $router,
         ?HtmlToText $htmlToText = null,
         ?LoggerInterface $logger = null,
+        ?string $channelHostname = null,
     ): CmsPagesDataSource {
         $query = $this->createStub(Query::class);
         $query->method('setParameters')->willReturnSelf();
@@ -56,15 +59,18 @@ class CmsPagesDataSourceTest extends TestCase
                 ->from(Page::class, $alias),
         );
 
+        $channel = $this->createStub(ChannelInterface::class);
+        $channel->method('getHostname')->willReturn($channelHostname);
+
         $channelResolver = $this->createStub(ChannelResolver::class);
-        $channelResolver->method('getChannel')->willReturn($this->createStub(ChannelInterface::class));
+        $channelResolver->method('getChannel')->willReturn($channel);
 
         return new CmsPagesDataSource(
             $pageRepository,
             $channelResolver,
             new CursorCodec(),
             $htmlToText ?? new HtmlToText(),
-            $router,
+            new ChannelUrlGenerator($router),
             $logger ?? new NullLogger(),
         );
     }
@@ -124,6 +130,31 @@ class CmsPagesDataSourceTest extends TestCase
         self::assertSame('About us', $document->title);
         self::assertStringContainsString('Hello', $document->text);
         self::assertNull($page->nextCursor);
+    }
+
+    public function testTheUrlIsBuiltOnTheResolvedChannelsHostname(): void
+    {
+        $context = new RequestContext();
+        $context->setScheme('https');
+        $context->setHost('request.example');
+
+        $router = $this->createStub(RouterInterface::class);
+        $router->method('getContext')->willReturn($context);
+        $router->method('generate')->willReturnCallback(
+            static fn (): string => sprintf('%s://%s/about-us', $context->getScheme(), $context->getHost()),
+        );
+
+        $dataSource = $this->createDataSource(
+            [$this->createPage()],
+            $router,
+            null,
+            null,
+            'other-channel.example',
+        );
+
+        $page = $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        self::assertSame('https://other-channel.example/about-us', $page->documents[0]->url);
     }
 
     public function testConversionFailureSkipsOnlyTheAffectedDocument(): void

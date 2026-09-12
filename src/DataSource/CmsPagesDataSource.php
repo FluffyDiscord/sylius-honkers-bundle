@@ -10,6 +10,7 @@ use Doctrine\ORM\Query\Expr\Join;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\PageInterface;
 use MonsieurBiz\SyliusCmsPagePlugin\Repository\PageRepositoryInterface;
 use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
 use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotDataSourceInterface;
 use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
 use FluffyDiscord\SyliusChatbotBundle\DTO\DocumentPage;
@@ -19,18 +20,17 @@ use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
 use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
 use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Symfony\Component\Routing\RouterInterface;
+use Sylius\Component\Core\Model\ChannelInterface;
 
 readonly class CmsPagesDataSource implements ChatbotDataSourceInterface
 {
     public function __construct(
         private PageRepositoryInterface $pageRepository,
-        private ChannelResolver $channelResolver,
-        private CursorCodec $cursorCodec,
-        private HtmlToText $htmlToText,
-        private RouterInterface $router,
-        private LoggerInterface $logger,
+        private ChannelResolver         $channelResolver,
+        private CursorCodec             $cursorCodec,
+        private HtmlToText              $htmlToText,
+        private ChannelUrlGenerator     $channelUrlGenerator,
+        private LoggerInterface         $logger,
     ) {
     }
 
@@ -85,7 +85,7 @@ readonly class CmsPagesDataSource implements ChatbotDataSourceInterface
         foreach ($pages as $page) {
             $lastFetchedId = $page->getId();
             try {
-                $document = $this->buildDocument($page, $locale);
+                $document = $this->buildDocument($page, $channel, $locale);
             } catch (\RuntimeException $exception) {
                 $this->logger->error('Chatbot: building a CMS page document failed, skipping it.', [
                     'page' => $page->getCode() ?? 'id:' . $page->getId(),
@@ -117,7 +117,7 @@ readonly class CmsPagesDataSource implements ChatbotDataSourceInterface
         return 200;
     }
 
-    private function buildDocument(PageInterface $page, string $locale): ?SourceDocument
+    private function buildDocument(PageInterface $page, ChannelInterface $channel, string $locale): ?SourceDocument
     {
         $translation = $page->getTranslation($locale);
         $slug = $translation->getSlug();
@@ -126,10 +126,10 @@ readonly class CmsPagesDataSource implements ChatbotDataSourceInterface
             return null;
         }
 
-        $url = $this->router->generate(
+        $url = $this->channelUrlGenerator->generate(
+            $channel,
             'monsieurbiz_cms_page_show',
             ['slug' => $slug],
-            UrlGeneratorInterface::ABSOLUTE_URL,
         );
 
         $content = $translation->getContent();

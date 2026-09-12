@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\Product;
 
+use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
 use FluffyDiscord\SyliusChatbotBundle\Contract\ProductViewFactoryInterface;
 use FluffyDiscord\SyliusChatbotBundle\DTO\ProductItem;
 use Liip\ImagineBundle\Imagine\Cache\CacheManager;
@@ -12,15 +13,13 @@ use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Core\Model\ProductInterface;
 use Sylius\Component\Core\Model\ProductVariantInterface;
 use Sylius\Component\Inventory\Checker\AvailabilityCheckerInterface;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Symfony\Component\Routing\RouterInterface;
 
 readonly class ProductViewFactory implements ProductViewFactoryInterface
 {
     public function __construct(
         private VariantPriceResolver         $variantPriceResolver,
         private AvailabilityCheckerInterface $availabilityChecker,
-        private RouterInterface              $router,
+        private ChannelUrlGenerator          $channelUrlGenerator,
         private CacheManager                 $imageCacheManager,
         private LoggerInterface              $logger,
     ) {
@@ -60,14 +59,14 @@ readonly class ProductViewFactory implements ProductViewFactoryInterface
             (string) $variant->getCode(),
             (string) $product->getCode(),
             $this->buildName($product, $variant, $locale),
-            $this->router->generate(
+            $this->channelUrlGenerator->generate(
+                $channel,
                 'sylius_shop_product_show',
                 ['slug' => $slug, '_locale' => $locale],
-                UrlGeneratorInterface::ABSOLUTE_URL,
             ),
             $priceMinor,
             (string) $baseCurrency->getCode(),
-            $this->resolveImageUrl($product, $variant),
+            $this->resolveImageUrl($product, $variant, $channel),
             $this->availabilityChecker->isStockAvailable($variant),
         );
     }
@@ -85,8 +84,11 @@ readonly class ProductViewFactory implements ProductViewFactoryInterface
         return sprintf('%s — %s', $productName, $variantName);
     }
 
-    private function resolveImageUrl(ProductInterface $product, ProductVariantInterface $variant): ?string
-    {
+    private function resolveImageUrl(
+        ProductInterface $product,
+        ProductVariantInterface $variant,
+        ChannelInterface $channel,
+    ): ?string {
         $image = $variant->getImages()->first();
 
         if ($image === false) {
@@ -104,7 +106,10 @@ readonly class ProductViewFactory implements ProductViewFactoryInterface
             return null;
         }
 
-        return $this->imageCacheManager->getBrowserPath($path, $this->getImageFilter());
+        return $this->channelUrlGenerator->runOnChannelHost(
+            $channel,
+            fn (): string => $this->imageCacheManager->getBrowserPath($path, $this->getImageFilter()),
+        );
     }
 
     private function getImageFilter(): string

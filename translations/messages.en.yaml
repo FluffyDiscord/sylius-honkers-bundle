@@ -7,6 +7,7 @@ fluffydiscord_sylius_chatbot:
         invalid_cursor: 'The pagination cursor is invalid.'
         invalid_locale: 'The requested locale is not served.'
         invalid_channel: 'The requested channel does not exist.'
+        ambiguous_taxon_tree: 'The channel has no menu taxon and the shop has several taxon trees, so its categories cannot be told apart.'
         bad_request: 'The request could not be processed.'
         not_found: 'The requested resource does not exist.'
         method_not_allowed: 'The HTTP method is not allowed for this endpoint.'

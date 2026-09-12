@@ -8,6 +8,7 @@ use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
 use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotDataSourceInterface;
 use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
 use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
+use FluffyDiscord\SyliusChatbotBundle\Exception\ChatbotApiException;
 use FluffyDiscord\SyliusChatbotBundle\Exception\InvalidChannelException;
 use FluffyDiscord\SyliusChatbotBundle\Exception\InvalidLocaleException;
 use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
@@ -130,7 +131,14 @@ class NotifyAllCommand extends Command
             }
 
             foreach ($this->resolveLocales($dataSource, $locale) as $localeCode) {
-                $failedBatchCount += $this->notifyLocale($io, $source, $dataSource, $localeCode);
+                try {
+                    $failedBatchCount += $this->notifyLocale($io, $source, $dataSource, $localeCode);
+                } catch (ChatbotApiException $exception) {
+                    $io->error(sprintf('%s: %s', $source->value, $exception->getMessage()));
+                    ++$failedBatchCount;
+
+                    break;
+                }
             }
         }
 

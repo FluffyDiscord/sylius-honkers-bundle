@@ -7,13 +7,16 @@ namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\DataSource;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
+use Doctrine\ORM\Query\Parameter;
 use Doctrine\ORM\QueryBuilder;
 use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
 use FluffyDiscord\SyliusChatbotBundle\Contract\ProductIndexabilityInterface;
 use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
 use FluffyDiscord\SyliusChatbotBundle\DataSource\CategoriesDataSource;
 use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
 use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
+use FluffyDiscord\SyliusChatbotBundle\Exception\AmbiguousChannelTaxonTreeException;
 use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -26,6 +29,7 @@ use Sylius\Component\Core\Model\ProductVariantInterface;
 use Sylius\Component\Core\Model\Taxon;
 use Sylius\Component\Core\Model\TaxonInterface;
 use Sylius\Component\Taxonomy\Model\TaxonTranslationInterface;
+use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\RouterInterface;
 
 class CategoriesDataSourceTest extends TestCase
@@ -33,16 +37,25 @@ class CategoriesDataSourceTest extends TestCase
     /** @var list<string> */
     private array $capturedDqls = [];
 
+    /** @var list<Parameter> */
+    private array $capturedParameters = [];
+
     private function createDataSource(
         array $taxons,
         array $subtreePairs = [],
         ?TaxonInterface $menuTaxon = null,
         ?\Closure $isIndexable = null,
+        ?array $treeRoots = null,
+        ?string $channelHostname = 'shop.example',
     ): CategoriesDataSource {
+        $taxonEntityManager = $this->createEntityManager(
+            $taxons,
+            $treeRoots ?? [$this->createTaxon(1, 'ROOT', 'Root', 'root')],
+        );
         $taxonRepository = $this->createStub(TaxonRepository::class);
         $taxonRepository->method('getClassName')->willReturn(Taxon::class);
         $taxonRepository->method('createQueryBuilder')->willReturnCallback(
-            fn (string $alias): QueryBuilder => (new QueryBuilder($this->createEntityManager($taxons)))
+            fn (string $alias): QueryBuilder => (new QueryBuilder($taxonEntityManager))
                 ->select($alias)
                 ->from(Taxon::class, $alias),
         );
@@ -61,13 +74,14 @@ class CategoriesDataSourceTest extends TestCase
         );
 
         $channel = $this->createStub(ChannelInterface::class);
+        $channel->method('getCode')->willReturn('DEFAULT');
         $channel->method('getMenuTaxon')->willReturn($menuTaxon);
+        $channel->method('getHostname')->willReturn($channelHostname);
 
         $channelResolver = $this->createStub(ChannelResolver::class);
         $channelResolver->method('getChannel')->willReturn($channel);
 
-        $router = $this->createStub(RouterInterface::class);
-        $router->method('generate')->willReturn('https://shop.example/taxons/clothing/t-shirts');
+        $router = $this->createRouter();
 
         return new CategoriesDataSource(
             $taxonRepository,
@@ -76,9 +90,40 @@ class CategoriesDataSourceTest extends TestCase
             $channelResolver,
             new CursorCodec(),
             new HtmlToText(),
-            $router,
+            new ChannelUrlGenerator($router),
             new NullLogger(),
         );
+    }
+
+    private function createRouter(): RouterInterface
+    {
+        $context = new RequestContext();
+        $context->setScheme('https');
+        $context->setHost('request.example');
+
+        $router = $this->createStub(RouterInterface::class);
+        $router->method('getContext')->willReturn($context);
+        $router->method('generate')->willReturnCallback(
+            static fn (): string => sprintf('%s://%s/taxons/clothing/t-shirts', $context->getScheme(), $context->getHost()),
+        );
+
+        return $router;
+    }
+
+    private function findCapturedDql(string $needle): string
+    {
+        foreach ($this->capturedDqls as $capturedDql) {
+            if (str_contains($capturedDql, $needle)) {
+                return $capturedDql;
+            }
+        }
+
+        self::fail(sprintf('No captured DQL contains "%s".', $needle));
+    }
+
+    private function getTaxonDql(): string
+    {
+        return $this->findCapturedDql('taxonTranslation.locale');
     }
 
     private function createProductEntityManager(array $subtreePairs): EntityManagerInterface
@@ -104,10 +149,34 @@ class CategoriesDataSourceTest extends TestCase
         return $entityManager;
     }
 
+    /**
+     * @return list<string>
+     */
+    private function getBoundParameterNames(): array
+    {
+        $names = [];
+
+        foreach ($this->capturedParameters as $parameter) {
+            $names[] = (string) $parameter->getName();
+        }
+
+        sort($names);
+
+        return $names;
+    }
+
     private function createResultQuery(array $result): Query
     {
         $query = $this->createStub(Query::class);
-        $query->method('setParameters')->willReturnSelf();
+        $query->method('setParameters')->willReturnCallback(
+            function (mixed $parameters) use (&$query): Query {
+                foreach ($parameters as $parameter) {
+                    $this->capturedParameters[] = $parameter;
+                }
+
+                return $query;
+            },
+        );
         $query->method('setFirstResult')->willReturnSelf();
         $query->method('setMaxResults')->willReturnSelf();
         $query->method('getResult')->willReturn($result);
@@ -141,16 +210,18 @@ class CategoriesDataSourceTest extends TestCase
         return $menuTaxon;
     }
 
-    private function createEntityManager(array $result): EntityManagerInterface
+    private function createEntityManager(array $result, array $treeRoots): EntityManagerInterface
     {
         $query = $this->createResultQuery($result);
+        $treeRootsQuery = $this->createResultQuery($treeRoots);
 
         $entityManager = $this->createStub(EntityManagerInterface::class);
         $entityManager->method('createQuery')->willReturnCallback(
-            function (string $dql) use ($query): Query {
+            function (string $dql) use ($query, $treeRootsQuery): Query {
                 $this->capturedDqls[] = $dql;
+                $isTreeRootQuery = str_contains($dql, 'taxon.parent IS NULL');
 
-                return $query;
+                return $isTreeRootQuery ? $treeRootsQuery : $query;
             },
         );
 
@@ -217,7 +288,7 @@ class CategoriesDataSourceTest extends TestCase
         $dataSource->getDocuments(new SourceQuery('cs_CZ'));
 
         self::assertNotSame([], $this->capturedDqls);
-        $taxonDql = $this->capturedDqls[0];
+        $taxonDql = $this->getTaxonDql();
         self::assertStringContainsString('taxon.enabled = :enabled', $taxonDql);
         self::assertStringContainsString('taxonTranslation.locale = :locale', $taxonDql);
         self::assertStringContainsString('taxon.parent IS NOT NULL', $taxonDql);
@@ -234,7 +305,7 @@ class CategoriesDataSourceTest extends TestCase
             ids: ['T_SHIRTS'],
         ));
 
-        $taxonDql = $this->capturedDqls[0];
+        $taxonDql = $this->getTaxonDql();
         self::assertStringContainsString('taxon.code IN (:codes)', $taxonDql);
         self::assertStringNotContainsString('taxon.id > :lastId', $taxonDql);
         self::assertNull($page->nextCursor);
@@ -247,7 +318,7 @@ class CategoriesDataSourceTest extends TestCase
 
         $dataSource->getDocuments(new SourceQuery('cs_CZ'));
 
-        $taxonDql = $this->capturedDqls[0];
+        $taxonDql = $this->getTaxonDql();
         self::assertStringContainsString('taxon.root = :treeRoot', $taxonDql);
         self::assertStringContainsString('taxon.left >= :treeLeft', $taxonDql);
         self::assertStringContainsString('taxon.right <= :treeRight', $taxonDql);
@@ -266,7 +337,7 @@ class CategoriesDataSourceTest extends TestCase
         $page = $dataSource->getDocuments(new SourceQuery('cs_CZ'));
 
         self::assertSame(2, $page->documents[0]->metadata['productCount']);
-        $subtreeDql = $this->capturedDqls[1];
+        $subtreeDql = $this->findCapturedDql('ancestorTaxon');
         self::assertStringContainsString('SELECT DISTINCT', $subtreeDql);
         self::assertStringContainsString('ancestorTaxon.root = descendantTaxon.root', $subtreeDql);
         self::assertStringContainsString('ancestorTaxon.left <= descendantTaxon.left', $subtreeDql);
@@ -290,5 +361,119 @@ class CategoriesDataSourceTest extends TestCase
         $page = $dataSource->getDocuments(new SourceQuery('cs_CZ'));
 
         self::assertSame(1, $page->documents[0]->metadata['productCount']);
+    }
+
+    public function testWithoutAMenuTaxonTheShopsOnlyTreeIsPinned(): void
+    {
+        $onlyTreeRoot = $this->createTaxon(1, 'ROOT', 'Root', 'root');
+        $dataSource = $this->createDataSource([], [], null, null, [$onlyTreeRoot]);
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        $taxonDql = $this->getTaxonDql();
+        self::assertStringContainsString('taxon.parent IS NOT NULL', $taxonDql);
+        self::assertStringContainsString('taxon.root = :treeRoot', $taxonDql);
+    }
+
+    public function testWithoutAMenuTaxonASecondTaxonTreeIsRefusedInsteadOfServed(): void
+    {
+        $treeRoots = [
+            $this->createTaxon(1, 'ROOT', 'Root', 'root'),
+            $this->createTaxon(2, 'OTHER_ROOT', 'Other root', 'other-root'),
+        ];
+        $dataSource = $this->createDataSource([], [], null, null, $treeRoots);
+
+        $this->expectException(AmbiguousChannelTaxonTreeException::class);
+        $this->expectExceptionMessageMatches('/menu taxon/');
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+    }
+
+    public function testTaxonsBelowADisabledAncestorAreExcluded(): void
+    {
+        $dataSource = $this->createDataSource([]);
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        $taxonDql = $this->getTaxonDql();
+        self::assertStringContainsString('NOT EXISTS', $taxonDql);
+        self::assertStringContainsString('disabledAncestor.enabled = :ancestorEnabled', $taxonDql);
+        self::assertStringContainsString('disabledAncestor.root = taxon.root', $taxonDql);
+        self::assertStringContainsString('disabledAncestor.left < taxon.left', $taxonDql);
+        self::assertStringContainsString('disabledAncestor.right > taxon.right', $taxonDql);
+    }
+
+    public function testADisabledTreeRootDoesNotBlackOutItsWholeTree(): void
+    {
+        $dataSource = $this->createDataSource([]);
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        self::assertStringContainsString('disabledAncestor.parent IS NOT NULL', $this->getTaxonDql());
+    }
+
+    public function testNeitherTheMenuTaxonNorAnythingAboveItBlacksOutTheChannel(): void
+    {
+        $dataSource = $this->createDataSource([], [], $this->createMenuTaxon());
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        $taxonDql = $this->getTaxonDql();
+        self::assertStringContainsString('disabledAncestor.left > :treeLeft', $taxonDql);
+        self::assertStringNotContainsString('disabledAncestor.left >= :treeLeft', $taxonDql);
+        self::assertStringContainsString('disabledAncestor.right <= :treeRight', $taxonDql);
+    }
+
+    public function testTheBoundsTheDisabledAncestorFilterReadsAreBound(): void
+    {
+        $dataSource = $this->createDataSource([], [], $this->createMenuTaxon());
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        self::assertSame(
+            ['ancestorEnabled', 'enabled', 'locale', 'treeLeft', 'treeRight', 'treeRoot'],
+            $this->getBoundParameterNames(),
+        );
+    }
+
+    public function testTheTreeCountIgnoresWhetherARootIsEnabled(): void
+    {
+        $dataSource = $this->createDataSource([]);
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        $treeRootDql = $this->findCapturedDql('taxon.parent IS NULL');
+        self::assertStringNotContainsString('enabled', $treeRootDql);
+    }
+
+    public function testAShopWithoutAnyTaxonTreeServesNothingRatherThanEveryTaxon(): void
+    {
+        $dataSource = $this->createDataSource([], [], null, null, []);
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        $taxonDql = $this->getTaxonDql();
+        self::assertStringContainsString('taxon.id IS NULL', $taxonDql);
+        self::assertStringNotContainsString('taxon.root = :treeRoot', $taxonDql);
+    }
+
+    public function testTheUrlIsBuiltOnTheResolvedChannelsHostname(): void
+    {
+        $taxon = $this->createTaxon(2, 'T_SHIRTS', 'T-Shirts', 'clothing/t-shirts');
+        $dataSource = $this->createDataSource([$taxon], [], null, null, null, 'other-channel.example');
+
+        $page = $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        self::assertStringStartsWith('https://other-channel.example/', $page->documents[0]->metadata['url']);
+    }
+
+    public function testTheUrlFallsBackToTheRequestHostWhenTheChannelHasNoHostname(): void
+    {
+        $taxon = $this->createTaxon(2, 'T_SHIRTS', 'T-Shirts', 'clothing/t-shirts');
+        $dataSource = $this->createDataSource([$taxon], [], null, null, null, null);
+
+        $page = $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        self::assertStringStartsWith('https://request.example/', $page->documents[0]->metadata['url']);
     }
 }
