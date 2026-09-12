@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\DataSource;
 
-use Doctrine\Common\Collections\Order;
+use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Query\Expr\Join;
 use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
@@ -71,7 +71,7 @@ readonly class ProductsDataSource implements ChatbotDataSourceInterface
             ->innerJoin('variant.product', 'product')
             ->innerJoin('product.translations', 'productTranslation', Join::WITH, 'productTranslation.locale = :locale')
             ->setParameter('locale', $locale)
-            ->orderBy('variant.id', Order::Ascending->value);
+            ->orderBy('variant.id', Criteria::ASC);
 
         if ($isIdLookup) {
             $queryBuilder->andWhere('variant.code IN (:codes)')->setParameter('codes', $query->ids);

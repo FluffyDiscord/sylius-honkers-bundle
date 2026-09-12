@@ -6,6 +6,7 @@
     "require": {
         "php": "^8.2",
         "ext-intl": "*",
+        "doctrine/collections": "^1.8 || ^2.1",
         "doctrine/doctrine-bundle": "^2.13 || ^3.2 || ^4.0",
         "doctrine/orm": "^2.20 || ^3.6 || ^4.0",
         "liip/imagine-bundle": "^2.13",

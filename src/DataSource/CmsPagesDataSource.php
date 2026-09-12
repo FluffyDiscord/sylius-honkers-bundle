@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\DataSource;
 
-use Doctrine\Common\Collections\Order;
+use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Query\Expr\Join;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\PageInterface;
@@ -66,7 +66,7 @@ readonly class CmsPagesDataSource implements ChatbotDataSourceInterface
             ->setParameter('channel', $channel)
             ->setParameter('enabled', true)
             ->setParameter('now', new \DateTimeImmutable())
-            ->orderBy('page.id', Order::Ascending->value);
+            ->orderBy('page.id', Criteria::ASC);
 
         if ($isIdLookup) {
             $queryBuilder->andWhere('page.code IN (:codes)')->setParameter('codes', $query->ids);

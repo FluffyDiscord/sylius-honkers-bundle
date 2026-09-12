@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\DataSource;
 
-use Doctrine\Common\Collections\Order;
+use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
@@ -70,7 +70,7 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
             ->andWhere('taxon.enabled = :enabled')
             ->setParameter('locale', $locale)
             ->setParameter('enabled', true)
-            ->orderBy('taxon.id', Order::Ascending->value);
+            ->orderBy('taxon.id', Criteria::ASC);
 
         $this->restrictToChannelTree($queryBuilder, $channel);
 
