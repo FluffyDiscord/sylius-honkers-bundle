@@ -8,11 +8,13 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
+use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusChatbotBundle\EventListener\CatalogChangeListener;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Sylius\Component\Core\Model\ChannelPricingInterface;
 use Sylius\Component\Core\Model\ProductInterface;
 use Sylius\Component\Core\Model\ProductTranslationInterface;
@@ -30,6 +32,13 @@ class CatalogChangeListenerTest extends TestCase
     private function getEveryLocaleCodeInTheDatabase(): array
     {
         return ['cs_CZ', 'de_AT', 'de_DE', 'en_US', 'hr_HR', 'hu_HU', 'pl_PL', 'ro_RO', 'ru_RU', 'sk_SK', 'sl_SI'];
+    }
+
+    private function createNotifier(): RecordingCatalogChangeNotifier
+    {
+        $siteKeyResolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), 'site-key', []);
+
+        return new RecordingCatalogChangeNotifier($siteKeyResolver);
     }
 
     private function createListener(RecordingCatalogChangeNotifier $notifier): CatalogChangeListener
@@ -96,7 +105,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testProductChangeNotifiesEveryLocaleOfTheLocaleSource(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
         $listener = $this->createListener($notifier);
 
         $listener->postUpdate($this->createUpdateArgs($this->createProduct()));
@@ -107,7 +116,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testProductTranslationChangeNotifiesItsOwnLocaleOnly(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
         $listener = $this->createListener($notifier);
 
         $translation = $this->createStub(ProductTranslationInterface::class);
@@ -124,7 +133,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testTaxonChangeNotifiesCategoriesForEveryLocaleAndNoProducts(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
         $listener = $this->createListener($notifier);
 
         $taxon = $this->createStub(TaxonInterface::class);
@@ -138,7 +147,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testTaxonRenameNotifiesCategoriesForTheTranslationLocaleOnly(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
         $listener = $this->createListener($notifier);
 
         $taxon = $this->createStub(TaxonInterface::class);
@@ -158,7 +167,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testRemovedProductIsNotifiedByItsCode(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
         $listener = $this->createListener($notifier);
 
         $args = new PostRemoveEventArgs(
@@ -173,7 +182,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testDisablingAVariantNotifiesThatVariantAlone(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
         $listener = $this->createListener($notifier);
 
         $product = $this->createProduct();
@@ -186,7 +195,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testAPriceChangeNotifiesThePricedVariant(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
         $listener = $this->createListener($notifier);
 
         $product = $this->createProduct();
@@ -201,7 +210,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testAProductChangeFansOutToEveryVariantItOwns(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
         $listener = $this->createListener($notifier);
 
         $firstVariant = $this->createStub(ProductVariantInterface::class);
@@ -225,7 +234,7 @@ class CatalogChangeListenerTest extends TestCase
 
     public function testAFailingLocaleLookupDoesNotBreakTheFlush(): void
     {
-        $notifier = new RecordingCatalogChangeNotifier();
+        $notifier = $this->createNotifier();
 
         $localeCollectionProvider = $this->createStub(LocaleCollectionProviderInterface::class);
         $localeCollectionProvider->method('getAll')->willThrowException(new \RuntimeException('database gone'));

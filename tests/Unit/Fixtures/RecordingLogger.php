@@ -15,21 +15,4 @@ class RecordingLogger extends AbstractLogger
     {
         $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
     }
-
-    /**
-     * @return list<mixed>
-     */
-    public function getContextValues(string $contextKey): array
-    {
-        $values = [];
-
-        foreach ($this->records as $record) {
-            $hasContextKey = array_key_exists($contextKey, $record['context']);
-            if ($hasContextKey) {
-                $values[] = $record['context'][$contextKey];
-            }
-        }
-
-        return $values;
-    }
 }

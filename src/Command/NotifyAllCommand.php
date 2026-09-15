@@ -15,6 +15,7 @@ use FluffyDiscord\SyliusChatbotBundle\Exception\InvalidLocaleException;
 use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
 use FluffyDiscord\SyliusChatbotBundle\Locale\ShopLocaleResolver;
 use FluffyDiscord\SyliusChatbotBundle\Registry\DataSourceRegistry;
+use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -82,18 +83,15 @@ class NotifyAllCommand extends Command
         $this->channelResolver->setOverrideCode($channel);
 
         try {
-            $channelCode = (string) $this->channelResolver->getChannel()->getCode();
-            $siteKey = $this->siteKeyResolver->getSiteKey($channelCode);
-            if ($siteKey === '') {
-                $io->error(sprintf(
-                    'The channel "%s" has no site key, nothing can be announced. Set: widget.channel_site_keys.%s or widget.site_key.',
-                    $channelCode,
-                    $channelCode,
-                ));
+            $notifiedChannel = $this->resolveNotifiedChannel();
+            $channelRefusal = $this->findChannelRefusal($notifiedChannel);
+            if ($channelRefusal !== null) {
+                $io->error($channelRefusal);
 
                 return Command::FAILURE;
             }
 
+            $channelCode = $notifiedChannel?->getCode();
             $requestedLocale = $this->resolveRequestedLocale($locale);
             $failedBatchCount = $this->notifySources($io, $sources, $requestedLocale, $channelCode);
         } catch (InvalidChannelException $exception) {
@@ -125,6 +123,44 @@ class NotifyAllCommand extends Command
         return 2;
     }
 
+    /**
+     * @throws InvalidChannelException
+     */
+    private function resolveNotifiedChannel(): ?ChannelInterface
+    {
+        $hasChannelSiteKeys = $this->siteKeyResolver->hasChannelSiteKeys();
+        if (!$hasChannelSiteKeys) {
+            return null;
+        }
+
+        return $this->channelResolver->getChannel();
+    }
+
+    private function findChannelRefusal(?ChannelInterface $channel): ?string
+    {
+        if ($channel === null) {
+            return null;
+        }
+
+        $channelCode = (string) $channel->getCode();
+
+        $isEnabled = $channel->isEnabled();
+        if (!$isEnabled) {
+            return sprintf('The channel "%s" is disabled, its catalog is not announced.', $channelCode);
+        }
+
+        $siteKey = $this->siteKeyResolver->getSiteKey($channelCode);
+        if ($siteKey === '') {
+            return sprintf(
+                'The channel "%s" has no site key, nothing can be announced. Set: widget.channel_site_keys.%s or widget.site_key.',
+                $channelCode,
+                $channelCode,
+            );
+        }
+
+        return null;
+    }
+
     private function getMaxThrottleRetries(): int
     {
         return 5;
@@ -133,7 +169,7 @@ class NotifyAllCommand extends Command
     /**
      * @param list<CatalogSourceName> $sources
      */
-    private function notifySources(SymfonyStyle $io, array $sources, ?string $locale, string $channelCode): int
+    private function notifySources(SymfonyStyle $io, array $sources, ?string $locale, ?string $channelCode): int
     {
         $failedBatchCount = 0;
         foreach ($sources as $source) {
@@ -164,7 +200,7 @@ class NotifyAllCommand extends Command
         CatalogSourceName $source,
         ChatbotDataSourceInterface $dataSource,
         string $locale,
-        string $channelCode,
+        ?string $channelCode,
     ): int {
         $batchSize = $this->catalogChangeNotifier->getMaxExternalIdsPerRequest();
         $externalIds = [];
@@ -207,7 +243,7 @@ class NotifyAllCommand extends Command
         CatalogSourceName $source,
         string $locale,
         array $externalIds,
-        string $channelCode,
+        ?string $channelCode,
     ): int {
         $remainingRetries = $this->getMaxThrottleRetries();
 

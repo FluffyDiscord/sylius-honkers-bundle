@@ -8,7 +8,6 @@ use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
 use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusChatbotBundle\Command\NotifyAllCommand;
 use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDocument;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
 use FluffyDiscord\SyliusChatbotBundle\Locale\ShopLocaleResolver;
 use FluffyDiscord\SyliusChatbotBundle\Registry\DataSourceRegistry;
@@ -17,7 +16,6 @@ use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RecordingCatalogChange
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RecordingDataSource;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -110,98 +108,119 @@ class NotifyAllCommandTest extends TestCase
 
     /**
      * @param array<string, string> $channelSiteKeys
+     * @param list<?string>         $expectedNotifiedChannelCodes
+     * @param list<string>          $expectedQueriedLocales
      */
-    #[DataProvider('provideAnnouncedChannelSiteKeys')]
-    public function testTheResolvedChannelIsAnnouncedWithItsOwnCode(string $defaultSiteKey, array $channelSiteKeys): void
-    {
-        $source = new RecordingDataSource('products', null, [$this->createDocument('T-SHIRT-01')]);
-        $notifier = new RecordingCatalogChangeNotifier(acceptsNotifications: false);
-        $command = $this->createCommand($source, ['sk_SK'], 'SK', $notifier, $defaultSiteKey, $channelSiteKeys);
-
-        $command->__invoke($this->createStyle(), 'products', null, 'SK');
-
-        self::assertSame(
-            [[CatalogSourceName::Products, 'sk_SK', ['T-SHIRT-01'], 'SK']],
-            $notifier->notifications,
+    #[DataProvider('provideChannelSiteKeyOutcomes')]
+    public function testTheChannelSiteKeyDecidesWhatIsAnnounced(
+        string $defaultSiteKey,
+        array $channelSiteKeys,
+        bool $isChannelEnabled,
+        bool $hasDocuments,
+        int $expectedExitCode,
+        string $expectedOutput,
+        array $expectedNotifiedChannelCodes,
+        array $expectedQueriedLocales,
+    ): void {
+        $documents = $hasDocuments ? [$this->createDocument('T-SHIRT-01')] : [];
+        $source = new RecordingDataSource('products', null, $documents);
+        $siteKeyResolver = $this->createSiteKeyResolver($defaultSiteKey, $channelSiteKeys);
+        $notifier = new RecordingCatalogChangeNotifier($siteKeyResolver, acceptsNotifications: false);
+        $channelResolver = $this->createChannelResolver('SK', ['sk_SK'], $isChannelEnabled);
+        $command = new NotifyAllCommand(
+            $this->createRegistry($source),
+            $notifier,
+            $channelResolver,
+            new ShopLocaleResolver($channelResolver),
+            $siteKeyResolver,
         );
-    }
-
-    /**
-     * @return iterable<string, array{string, array<string, string>}>
-     */
-    public static function provideAnnouncedChannelSiteKeys(): iterable
-    {
-        yield 'mapped channel' => ['', ['SK' => 'sk-key']];
-        yield 'unmapped channel with a default key' => ['site-key', ['CZ' => 'cz-key']];
-        yield 'no channel keys' => ['site-key', []];
-    }
-
-    /**
-     * @param array<string, string> $channelSiteKeys
-     */
-    #[DataProvider('provideRefusedChannelSiteKeys')]
-    public function testAChannelWithoutASiteKeyAnnouncesNothing(string $defaultSiteKey, array $channelSiteKeys): void
-    {
-        $source = new RecordingDataSource('products', null, [$this->createDocument('T-SHIRT-01')]);
-        $notifier = new RecordingCatalogChangeNotifier();
-        $command = $this->createCommand($source, ['sk_SK'], 'SK', $notifier, $defaultSiteKey, $channelSiteKeys);
         $output = new BufferedOutput();
 
         $exitCode = $command->__invoke($this->createStyle($output), 'products', null, 'SK');
 
-        self::assertSame(Command::FAILURE, $exitCode);
-        self::assertSame([], $source->queriedLocales);
-        self::assertSame([], $notifier->notifications);
-        self::assertStringContainsString('The channel "SK" has no site key', $output->fetch());
+        self::assertSame($expectedExitCode, $exitCode);
+        self::assertStringContainsString($expectedOutput, $output->fetch());
+        self::assertSame($expectedNotifiedChannelCodes, array_column($notifier->notifications, 3));
+        self::assertSame($expectedQueriedLocales, $source->queriedLocales);
     }
 
     /**
-     * @return iterable<string, array{string, array<string, string>}>
+     * @return iterable<string, array{string, array<string, string>, bool, bool, int, string, list<?string>, list<string>}>
      */
-    public static function provideRefusedChannelSiteKeys(): iterable
+    public static function provideChannelSiteKeyOutcomes(): iterable
     {
-        yield 'unmapped channel without a default key' => ['', ['CZ' => 'cz-key']];
-        yield 'channel mapped to an empty key' => ['site-key', ['SK' => '']];
+        yield 'no channel keys announce with the default key' => [
+            'site-key', [], true, true,
+            Command::FAILURE, 'a batch of 1 ids was not accepted', [null], ['sk_SK'],
+        ];
+        yield 'no channel keys ignore whether the channel is enabled' => [
+            'site-key', [], false, false,
+            Command::SUCCESS, 'The whole catalog was announced', [], ['sk_SK'],
+        ];
+        yield 'mapped channel announces with its own code' => [
+            '', ['SK' => 'sk-key'], true, true,
+            Command::FAILURE, 'a batch of 1 ids was not accepted', ['SK'], ['sk_SK'],
+        ];
+        yield 'mapped channel with an empty catalog succeeds' => [
+            '', ['SK' => 'sk-key'], true, false,
+            Command::SUCCESS, 'The whole catalog was announced', [], ['sk_SK'],
+        ];
+        yield 'unmapped channel with a default key announces with its own code' => [
+            'site-key', ['CZ' => 'cz-key'], true, true,
+            Command::FAILURE, 'a batch of 1 ids was not accepted', ['SK'], ['sk_SK'],
+        ];
+        yield 'unmapped channel without a default key is refused' => [
+            '', ['CZ' => 'cz-key'], true, true,
+            Command::FAILURE, 'The channel "SK" has no site key', [], [],
+        ];
+        yield 'channel mapped to an empty key is refused' => [
+            'site-key', ['SK' => ''], true, true,
+            Command::FAILURE, 'The channel "SK" has no site key', [], [],
+        ];
+        yield 'disabled channel is refused' => [
+            '', ['SK' => 'sk-key'], false, true,
+            Command::FAILURE, 'The channel "SK" is disabled', [], [],
+        ];
     }
 
     /**
-     * @param list<string>          $channelLocales
-     * @param array<string, string> $channelSiteKeys
+     * @param list<string> $channelLocales
      */
-    private function createCommand(
-        RecordingDataSource $source,
-        array $channelLocales,
-        string $channelCode = 'CZ',
-        ?RecordingCatalogChangeNotifier $notifier = null,
-        string $defaultSiteKey = 'site-key',
-        array $channelSiteKeys = [],
-    ): NotifyAllCommand {
-        $registry = new DataSourceRegistry(new ServiceLocator([
-            'products' => fn (): RecordingDataSource => $source,
-        ]));
-        $channelResolver = $this->createChannelResolver($channelCode, $channelLocales);
-        $siteKeyResolver = new SiteKeyResolver(
-            $this->createStub(ChannelRepositoryInterface::class),
-            new NullLogger(),
-            $defaultSiteKey,
-            $channelSiteKeys,
-        );
+    private function createCommand(RecordingDataSource $source, array $channelLocales): NotifyAllCommand
+    {
+        $siteKeyResolver = $this->createSiteKeyResolver('site-key', []);
+        $channelResolver = $this->createChannelResolver('CZ', $channelLocales);
 
         return new NotifyAllCommand(
-            $registry,
-            $notifier ?? new RecordingCatalogChangeNotifier(),
+            $this->createRegistry($source),
+            new RecordingCatalogChangeNotifier($siteKeyResolver),
             $channelResolver,
             new ShopLocaleResolver($channelResolver),
             $siteKeyResolver,
         );
     }
 
+    private function createRegistry(RecordingDataSource $source): DataSourceRegistry
+    {
+        return new DataSourceRegistry(new ServiceLocator([
+            'products' => fn (): RecordingDataSource => $source,
+        ]));
+    }
+
+    /**
+     * @param array<string, string> $channelSiteKeys
+     */
+    private function createSiteKeyResolver(string $defaultSiteKey, array $channelSiteKeys): SiteKeyResolver
+    {
+        return new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), $defaultSiteKey, $channelSiteKeys);
+    }
+
     /**
      * @param list<string> $channelLocales
      */
-    private function createChannelResolver(string $channelCode, array $channelLocales): ChannelResolver
+    private function createChannelResolver(string $channelCode, array $channelLocales, bool $isChannelEnabled = true): ChannelResolver
     {
-        $channel = (new ChannelFixtureFactory())->createChannel($channelCode, $channelLocales);
+        $channel = (new ChannelFixtureFactory())->createChannel($channelCode, $channelLocales, $isChannelEnabled);
 
         $channelResolver = $this->createStub(ChannelResolver::class);
         $channelResolver->method('getChannel')->willReturn($channel);

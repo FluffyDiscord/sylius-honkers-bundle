@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Channel;
 
 use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusChatbotBundle\DTO\SiteKeyRouting;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RecordingLogger;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 
 class SiteKeyResolverTest extends TestCase
@@ -18,8 +17,6 @@ class SiteKeyResolverTest extends TestCase
      * @param array<string, array{locales: list<string>, enabled?: bool}> $channelDefinitions
      * @param array<string, string>                                        $channelSiteKeys
      * @param list<string>                                                 $locales
-     * @param array<string, list<string>>                                  $expectedSiteKeysByLocale
-     * @param list<string>                                                 $expectedSkippedChannelCodes
      */
     #[DataProvider('provideLocaleRouting')]
     public function testEveryLocaleIsRoutedToTheSitesOfTheChannelsServingIt(
@@ -27,25 +24,17 @@ class SiteKeyResolverTest extends TestCase
         string $defaultSiteKey,
         array $channelSiteKeys,
         array $locales,
-        array $expectedSiteKeysByLocale,
-        array $expectedSkippedChannelCodes,
+        SiteKeyRouting $expectedRouting,
     ): void {
-        $logger = new RecordingLogger();
-        $resolver = new SiteKeyResolver(
-            $this->createChannelRepository($channelDefinitions),
-            $logger,
-            $defaultSiteKey,
-            $channelSiteKeys,
-        );
+        $resolver = new SiteKeyResolver($this->createChannelRepository($channelDefinitions), $defaultSiteKey, $channelSiteKeys);
 
-        $siteKeysByLocale = $resolver->getSiteKeysByLocale($locales);
+        $routing = $resolver->getSiteKeyRouting($locales);
 
-        self::assertSame($expectedSiteKeysByLocale, $siteKeysByLocale);
-        self::assertSame($expectedSkippedChannelCodes, $logger->getContextValues('channelCode'));
+        self::assertEquals($expectedRouting, $routing);
     }
 
     /**
-     * @return iterable<string, array{array<string, array{locales: list<string>, enabled?: bool}>, string, array<string, string>, list<string>, array<string, list<string>>, list<string>}>
+     * @return iterable<string, array{array<string, array{locales: list<string>, enabled?: bool}>, string, array<string, string>, list<string>, SiteKeyRouting}>
      */
     public static function provideLocaleRouting(): iterable
     {
@@ -59,8 +48,7 @@ class SiteKeyResolverTest extends TestCase
             'default-key',
             [],
             ['cs_CZ', 'en_US'],
-            ['cs_CZ' => ['default-key'], 'en_US' => ['default-key']],
-            [],
+            new SiteKeyRouting(['cs_CZ' => ['default-key'], 'en_US' => ['default-key']]),
         ];
 
         yield 'no channel keys and no default key reaches no site' => [
@@ -68,8 +56,7 @@ class SiteKeyResolverTest extends TestCase
             '',
             [],
             ['cs_CZ'],
-            ['cs_CZ' => []],
-            [],
+            new SiteKeyRouting(['cs_CZ' => []]),
         ];
 
         yield 'each channel locale goes to its own site' => [
@@ -77,8 +64,7 @@ class SiteKeyResolverTest extends TestCase
             '',
             ['CZ' => 'cz-key', 'SK' => 'sk-key'],
             ['cs_CZ', 'sk_SK'],
-            ['cs_CZ' => ['cz-key'], 'sk_SK' => ['sk-key']],
-            [],
+            new SiteKeyRouting(['cs_CZ' => ['cz-key'], 'sk_SK' => ['sk-key']]),
         ];
 
         yield 'channels sharing a locale reach each of their sites' => [
@@ -89,8 +75,7 @@ class SiteKeyResolverTest extends TestCase
             '',
             ['DE' => 'de-key', 'AT' => 'at-key'],
             ['de_DE', 'de_AT'],
-            ['de_DE' => ['de-key', 'at-key'], 'de_AT' => ['at-key']],
-            [],
+            new SiteKeyRouting(['de_DE' => ['de-key', 'at-key'], 'de_AT' => ['at-key']]),
         ];
 
         yield 'channels sharing a site key reach it once' => [
@@ -101,8 +86,7 @@ class SiteKeyResolverTest extends TestCase
             '',
             ['CZ' => 'cz-key', 'CZ_B2B' => 'cz-key'],
             ['cs_CZ'],
-            ['cs_CZ' => ['cz-key']],
-            [],
+            new SiteKeyRouting(['cs_CZ' => ['cz-key']]),
         ];
 
         yield 'an unmapped channel falls back to the default site' => [
@@ -110,38 +94,42 @@ class SiteKeyResolverTest extends TestCase
             'default-key',
             ['CZ' => 'cz-key'],
             ['cs_CZ', 'sk_SK'],
-            ['cs_CZ' => ['cz-key'], 'sk_SK' => ['default-key']],
-            [],
+            new SiteKeyRouting(['cs_CZ' => ['cz-key'], 'sk_SK' => ['default-key']]),
         ];
 
-        yield 'an unmapped channel without a default key is skipped' => [
+        yield 'an unmapped channel without a default key is reported without a site key' => [
             $czechAndSlovakChannels,
             '',
             ['CZ' => 'cz-key'],
             ['cs_CZ', 'sk_SK'],
-            ['cs_CZ' => ['cz-key'], 'sk_SK' => []],
-            ['SK'],
+            new SiteKeyRouting(['cs_CZ' => ['cz-key'], 'sk_SK' => []], ['SK']),
         ];
 
-        yield 'a channel mapped to an empty key is skipped instead of falling back' => [
+        yield 'a keyless channel not serving the changed locales is not reported' => [
+            $czechAndSlovakChannels,
+            '',
+            ['CZ' => 'cz-key'],
+            ['cs_CZ'],
+            new SiteKeyRouting(['cs_CZ' => ['cz-key']]),
+        ];
+
+        yield 'a channel mapped to an empty key is reported as empty instead of falling back' => [
             $czechAndSlovakChannels,
             'default-key',
             ['CZ' => 'cz-key', 'SK' => ''],
             ['cs_CZ', 'sk_SK'],
-            ['cs_CZ' => ['cz-key'], 'sk_SK' => []],
-            ['SK'],
+            new SiteKeyRouting(['cs_CZ' => ['cz-key'], 'sk_SK' => []], [], ['SK']),
         ];
 
-        yield 'a disabled channel is not notified' => [
+        yield 'a disabled channel is neither notified nor reported' => [
             [
                 'CZ' => ['locales' => ['cs_CZ']],
                 'SK' => ['locales' => ['sk_SK'], 'enabled' => false],
             ],
             '',
-            ['CZ' => 'cz-key', 'SK' => 'sk-key'],
+            ['CZ' => 'cz-key'],
             ['cs_CZ', 'sk_SK'],
-            ['cs_CZ' => ['cz-key'], 'sk_SK' => []],
-            [],
+            new SiteKeyRouting(['cs_CZ' => ['cz-key'], 'sk_SK' => []]),
         ];
 
         yield 'a locale no channel serves reaches no site' => [
@@ -149,8 +137,7 @@ class SiteKeyResolverTest extends TestCase
             'default-key',
             ['CZ' => 'cz-key'],
             ['ru_RU'],
-            ['ru_RU' => []],
-            [],
+            new SiteKeyRouting(['ru_RU' => []]),
         ];
 
         yield 'numeric channel codes are matched' => [
@@ -158,8 +145,7 @@ class SiteKeyResolverTest extends TestCase
             '',
             ['123' => 'numeric-key'],
             ['cs_CZ'],
-            ['cs_CZ' => ['numeric-key']],
-            [],
+            new SiteKeyRouting(['cs_CZ' => ['numeric-key']]),
         ];
     }
 
@@ -167,9 +153,9 @@ class SiteKeyResolverTest extends TestCase
     {
         $channelRepository = $this->createMock(ChannelRepositoryInterface::class);
         $channelRepository->expects(self::never())->method('findAll');
-        $resolver = new SiteKeyResolver($channelRepository, new NullLogger(), 'default-key', []);
+        $resolver = new SiteKeyResolver($channelRepository, 'default-key', []);
 
-        $resolver->getSiteKeysByLocale(['cs_CZ']);
+        $resolver->getSiteKeyRouting(['cs_CZ']);
     }
 
     /**
@@ -182,7 +168,7 @@ class SiteKeyResolverTest extends TestCase
         string $channelCode,
         string $expectedSiteKey,
     ): void {
-        $resolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), new NullLogger(), $defaultSiteKey, $channelSiteKeys);
+        $resolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), $defaultSiteKey, $channelSiteKeys);
 
         self::assertSame($expectedSiteKey, $resolver->getSiteKey($channelCode));
     }
@@ -208,7 +194,7 @@ class SiteKeyResolverTest extends TestCase
         array $channelSiteKeys,
         bool $expectedHasAnySiteKey,
     ): void {
-        $resolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), new NullLogger(), $defaultSiteKey, $channelSiteKeys);
+        $resolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), $defaultSiteKey, $channelSiteKeys);
 
         self::assertSame($expectedHasAnySiteKey, $resolver->hasAnySiteKey());
     }

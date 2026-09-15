@@ -12,7 +12,6 @@ use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetExtension;
 use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 use Sylius\Component\Channel\Context\ChannelContextInterface;
 use Sylius\Component\Channel\Context\ChannelNotFoundException;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
@@ -75,6 +74,7 @@ class WidgetTemplateTest extends TestCase
         yield 'unmapped channel falls back to the context key' => ['DE', $channelSiteKeys, 'site-key'];
         yield 'no channel keys' => ['SK', [], 'site-key'];
         yield 'no resolvable channel falls back to the context key' => [null, $channelSiteKeys, 'site-key'];
+        yield 'channel mapped to an empty key renders nothing' => ['SK', ['CZ' => 'cz-key', 'SK' => ''], ''];
     }
 
     /**
@@ -91,6 +91,10 @@ class WidgetTemplateTest extends TestCase
 
     private function getExpectedMarkup(string $siteKey): string
     {
+        if ($siteKey === '') {
+            return '';
+        }
+
         return '<script src="https://cdn.test/chat.js" defer></script>' . "\n"
             . '<ai-chat-widget site-key="' . $siteKey . '" locale="cs_CZ" backend-url="https://backend.test"></ai-chat-widget>';
     }
@@ -154,7 +158,6 @@ class WidgetTemplateTest extends TestCase
 
         $siteKeyResolver = new SiteKeyResolver(
             $this->createStub(ChannelRepositoryInterface::class),
-            new NullLogger(),
             'config-default-key',
             $channelSiteKeys,
         );

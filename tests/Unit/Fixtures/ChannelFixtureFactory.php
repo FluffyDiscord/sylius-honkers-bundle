@@ -7,7 +7,7 @@ namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures;
 use Sylius\Component\Core\Model\Channel;
 use Sylius\Component\Locale\Model\Locale;
 
-class ChannelFixtureFactory
+readonly class ChannelFixtureFactory
 {
     /**
      * @param list<string> $localeCodes

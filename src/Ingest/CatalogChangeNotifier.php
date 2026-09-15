@@ -6,6 +6,7 @@ namespace FluffyDiscord\SyliusChatbotBundle\Ingest;
 
 use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusChatbotBundle\DTO\NotificationOutcome;
+use FluffyDiscord\SyliusChatbotBundle\DTO\SiteKeyRouting;
 use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\ConsoleEvents;
@@ -66,7 +67,7 @@ class CatalogChangeNotifier implements ResetInterface
         }
         $hasAnySiteKey = $this->siteKeyResolver->hasAnySiteKey();
         if (!$hasAnySiteKey) {
-            $missingKeys[] = 'widget.site_key';
+            $missingKeys[] = 'widget.site_key or widget.channel_site_keys';
         }
 
         return $missingKeys;
@@ -112,14 +113,16 @@ class CatalogChangeNotifier implements ResetInterface
         }
 
         try {
-            $siteKeysByLocale = $this->getSiteKeysByLocale($pendingChanges);
+            $siteKeyRouting = $this->getSiteKeyRouting($pendingChanges);
         } catch (\Throwable $exception) {
             $this->logger->warning('Chatbot: resolving the sites to notify about catalog changes failed.', ['exception' => $exception]);
 
             return;
         }
 
-        $responses = $this->issueRequests($pendingChanges, $siteKeysByLocale);
+        $this->logSkippedChannels($siteKeyRouting);
+
+        $responses = $this->issueRequests($pendingChanges, $siteKeyRouting);
         $this->drainWithinBudget($responses);
     }
 
@@ -143,9 +146,7 @@ class CatalogChangeNotifier implements ResetInterface
 
         $siteKey = $this->resolveSiteKey($channelCode);
         if ($siteKey === '') {
-            $this->logger->warning('Chatbot: the channel has no site key, skipping its catalog notifications.', [
-                'channelCode' => $channelCode,
-            ]);
+            $this->logMissingSiteKey($channelCode);
 
             return new NotificationOutcome(false);
         }
@@ -223,42 +224,71 @@ class CatalogChangeNotifier implements ResetInterface
         return $this->siteKeyResolver->getSiteKey($channelCode);
     }
 
+    private function logMissingSiteKey(?string $channelCode): void
+    {
+        if ($channelCode === null) {
+            $this->logger->warning('Chatbot: no default site key is configured, skipping the catalog notification.');
+
+            return;
+        }
+
+        $this->logger->warning('Chatbot: the channel has no site key, skipping the catalog notification.', [
+            'channelCode' => $channelCode,
+        ]);
+    }
+
     /**
      * @param array<string, array{source: CatalogSourceName, locale: string, externalIds: array<string, true>}> $pendingChanges
-     *
-     * @return array<string, list<string>>
      */
-    private function getSiteKeysByLocale(array $pendingChanges): array
+    private function getSiteKeyRouting(array $pendingChanges): SiteKeyRouting
     {
         $locales = [];
         foreach ($pendingChanges as $change) {
             $locales[$change['locale']] = $change['locale'];
         }
 
-        return $this->siteKeyResolver->getSiteKeysByLocale(array_values($locales));
+        return $this->siteKeyResolver->getSiteKeyRouting(array_values($locales));
+    }
+
+    private function logSkippedChannels(SiteKeyRouting $siteKeyRouting): void
+    {
+        foreach ($siteKeyRouting->channelCodesWithoutSiteKey as $channelCode) {
+            $this->logger->warning('Chatbot: the channel has no site key, skipping its catalog notifications.', [
+                'channelCode' => $channelCode,
+            ]);
+        }
+
+        foreach ($siteKeyRouting->channelCodesWithEmptySiteKey as $channelCode) {
+            $this->logger->debug('Chatbot: the channel site key is configured empty, skipping its catalog notifications.', [
+                'channelCode' => $channelCode,
+            ]);
+        }
     }
 
     /**
      * @param array<string, array{source: CatalogSourceName, locale: string, externalIds: array<string, true>}> $pendingChanges
-     * @param array<string, list<string>>                                                                         $siteKeysByLocale
      *
      * @return list<ResponseInterface>
      */
-    private function issueRequests(array $pendingChanges, array $siteKeysByLocale): array
+    private function issueRequests(array $pendingChanges, SiteKeyRouting $siteKeyRouting): array
     {
         $responses = [];
         foreach ($pendingChanges as $change) {
             $externalIds = array_keys($change['externalIds']);
             $batches = array_chunk($externalIds, $this->getMaxExternalIdsPerRequest());
-            $siteKeys = $siteKeysByLocale[$change['locale']] ?? [];
-            foreach ($siteKeys as $siteKey) {
+            foreach ($siteKeyRouting->getSiteKeys($change['locale']) as $siteKey) {
                 foreach ($batches as $batch) {
-                    $responses[] = $this->issueRequest($change['source'], $change['locale'], $batch, $siteKey);
+                    $response = $this->issueRequest($change['source'], $change['locale'], $batch, $siteKey);
+                    if ($response === null) {
+                        continue;
+                    }
+
+                    $responses[] = $response;
                 }
             }
         }
 
-        return array_values(array_filter($responses));
+        return $responses;
     }
 
     /**

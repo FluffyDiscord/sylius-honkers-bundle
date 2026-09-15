@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\Channel;
 
-use Psr\Log\LoggerInterface;
+use FluffyDiscord\SyliusChatbotBundle\DTO\SiteKeyRouting;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -16,7 +16,6 @@ readonly class SiteKeyResolver
      */
     public function __construct(
         private ChannelRepositoryInterface $channelRepository,
-        private LoggerInterface            $logger,
 
         #[Autowire(param: 'fluffydiscord_sylius_chatbot.widget.site_key')]
         private string $defaultSiteKey,
@@ -29,6 +28,11 @@ readonly class SiteKeyResolver
     public function getDefaultSiteKey(): string
     {
         return $this->defaultSiteKey;
+    }
+
+    public function hasChannelSiteKeys(): bool
+    {
+        return $this->channelSiteKeys !== [];
     }
 
     public function hasAnySiteKey(): bool
@@ -54,54 +58,63 @@ readonly class SiteKeyResolver
 
     /**
      * @param list<string> $locales
-     *
-     * @return array<string, list<string>>
      */
-    public function getSiteKeysByLocale(array $locales): array
+    public function getSiteKeyRouting(array $locales): SiteKeyRouting
     {
-        if ($this->channelSiteKeys === []) {
-            return $this->getDefaultSiteKeyForEveryLocale($locales);
+        $hasChannelSiteKeys = $this->hasChannelSiteKeys();
+        if (!$hasChannelSiteKeys) {
+            return $this->getDefaultSiteKeyRouting($locales);
         }
 
         $siteKeysByLocale = array_fill_keys($locales, []);
+        $channelCodesWithoutSiteKey = [];
+        $channelCodesWithEmptySiteKey = [];
 
         foreach ($this->getEnabledChannels() as $channel) {
+            $channelLocaleCodes = $this->getChannelLocaleCodes($channel);
+            $servedLocales = array_values(array_intersect($channelLocaleCodes, $locales));
+            if ($servedLocales === []) {
+                continue;
+            }
+
             $channelCode = (string) $channel->getCode();
-            $siteKey = $this->getSiteKey($channelCode);
-            if ($siteKey === '') {
-                $this->logger->warning('Chatbot: the channel has no site key, skipping its catalog notifications.', [
-                    'channelCode' => $channelCode,
-                ]);
+            $channelSiteKey = $this->findChannelSiteKey($channelCode);
+            if ($channelSiteKey === '') {
+                $channelCodesWithEmptySiteKey[] = $channelCode;
 
                 continue;
             }
 
-            foreach ($this->getChannelLocaleCodes($channel) as $localeCode) {
-                $isRequestedLocale = array_key_exists($localeCode, $siteKeysByLocale);
-                if (!$isRequestedLocale) {
-                    continue;
-                }
+            $siteKey = $channelSiteKey ?? $this->defaultSiteKey;
+            if ($siteKey === '') {
+                $channelCodesWithoutSiteKey[] = $channelCode;
 
-                $siteKeysByLocale[$localeCode][$siteKey] = $siteKey;
+                continue;
+            }
+
+            foreach ($servedLocales as $servedLocale) {
+                $siteKeysByLocale[$servedLocale][$siteKey] = $siteKey;
             }
         }
 
-        return array_map(array_values(...), $siteKeysByLocale);
+        return new SiteKeyRouting(
+            array_map(array_values(...), $siteKeysByLocale),
+            $channelCodesWithoutSiteKey,
+            $channelCodesWithEmptySiteKey,
+        );
     }
 
     /**
      * @param list<string> $locales
-     *
-     * @return array<string, list<string>>
      */
-    private function getDefaultSiteKeyForEveryLocale(array $locales): array
+    private function getDefaultSiteKeyRouting(array $locales): SiteKeyRouting
     {
         $siteKeys = [];
         if ($this->defaultSiteKey !== '') {
             $siteKeys[] = $this->defaultSiteKey;
         }
 
-        return array_fill_keys($locales, $siteKeys);
+        return new SiteKeyRouting(array_fill_keys($locales, $siteKeys));
     }
 
     /**
@@ -133,11 +146,12 @@ readonly class SiteKeyResolver
         $localeCodes = [];
 
         foreach ($channel->getLocales() as $locale) {
-            $localeCode = $locale->getCode();
-
-            if ($localeCode !== null && $localeCode !== '') {
-                $localeCodes[] = $localeCode;
+            $localeCode = (string) $locale->getCode();
+            if ($localeCode === '') {
+                continue;
             }
+
+            $localeCodes[] = $localeCode;
         }
 
         return $localeCodes;

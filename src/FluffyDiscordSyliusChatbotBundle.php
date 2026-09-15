@@ -169,7 +169,7 @@ class FluffyDiscordSyliusChatbotBundle extends AbstractBundle
      */
     private function hasEmptyChannelCode(array $channelSiteKeys): bool
     {
-        $channelCodes = array_map('strval', array_keys($channelSiteKeys));
+        $channelCodes = array_map(strval(...), array_keys($channelSiteKeys));
 
         return in_array('', $channelCodes, true);
     }

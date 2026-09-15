@@ -8,7 +8,6 @@ use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetExtension;
 use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 use Sylius\Component\Channel\Context\ChannelContextInterface;
 use Sylius\Component\Channel\Context\ChannelNotFoundException;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
@@ -47,7 +46,7 @@ class WidgetTemplateTest extends TestCase
 
         $channelContext = $this->createStub(ChannelContextInterface::class);
         $channelContext->method('getChannel')->willThrowException(new ChannelNotFoundException());
-        $siteKeyResolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), new NullLogger(), 'pk_test', []);
+        $siteKeyResolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), 'pk_test', []);
         $runtime = new ChatbotWidgetRuntime($channelContext, $siteKeyResolver);
         $twig->addRuntimeLoader(new FactoryRuntimeLoader([
             ChatbotWidgetRuntime::class => fn (): ChatbotWidgetRuntime => $runtime,
