@@ -4,16 +4,32 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit;
 
+use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusChatbotBundle\Command\NotifyAllCommand;
+use FluffyDiscord\SyliusChatbotBundle\EventListener\CatalogChangeListener;
 use FluffyDiscord\SyliusChatbotBundle\FluffyDiscordSyliusChatbotBundle;
+use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusChatbotBundle\Locale\ShopLocaleResolver;
+use FluffyDiscord\SyliusChatbotBundle\Registry\DataSourceRegistry;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\NamedExtension;
+use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetExtension;
+use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
+use Sylius\Component\Channel\Context\ChannelContextInterface;
+use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
+use Sylius\Component\Locale\Provider\LocaleCollectionProviderInterface;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Twig\Extension\ExtensionInterface;
+use Twig\Extension\RuntimeExtensionInterface;
 
 class FluffyDiscordSyliusChatbotBundleTest extends TestCase
 {
@@ -130,6 +146,116 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
 
         self::assertSame(['CZ_WEB' => 'cz-key'], $container->getParameter('fluffydiscord_sylius_chatbot.widget.channel_site_keys'));
         self::assertSame('site-key', $container->getParameter('fluffydiscord_sylius_chatbot.widget.site_key'));
+    }
+
+    public function testTheSiteKeyServicesWireInACompiledContainer(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.build_dir', sys_get_temp_dir());
+        $container->registerForAutoconfiguration(ExtensionInterface::class)->addTag('twig.extension');
+        $container->registerForAutoconfiguration(RuntimeExtensionInterface::class)->addTag('twig.runtime');
+        $this->registerShopServices($container);
+
+        $bundle = new FluffyDiscordSyliusChatbotBundle();
+        $bundle->build($container);
+        $bundle->getContainerExtension()->load([[
+            'api_secret' => 'secret',
+            'backend_url' => 'https://backend.test',
+            'ingest_secret' => 'ingest-secret',
+            'widget' => [
+                'site_key' => 'site-key',
+                'channel_site_keys' => ['CZ_WEB' => 'cz-key', 'SK_WEB' => '%env(CHATBOT_TEST_SITE_KEY_SK)%'],
+            ],
+        ]], $container);
+        $this->keepOnlyWiredBundleServices($container);
+        $_ENV['CHATBOT_TEST_SITE_KEY_SK'] = 'sk-key';
+
+        try {
+            $container->compile(resolveEnvPlaceholders: true);
+        } finally {
+            unset($_ENV['CHATBOT_TEST_SITE_KEY_SK']);
+        }
+
+        $this->setShopServices($container);
+        $siteKeyResolver = $container->get(SiteKeyResolver::class);
+
+        self::assertInstanceOf(SiteKeyResolver::class, $siteKeyResolver);
+        self::assertSame('cz-key', $siteKeyResolver->getSiteKey('CZ_WEB'));
+        self::assertSame('sk-key', $siteKeyResolver->getSiteKey('SK_WEB'));
+        self::assertSame('site-key', $siteKeyResolver->getSiteKey('DE_WEB'));
+        self::assertInstanceOf(CatalogChangeListener::class, $container->get(CatalogChangeListener::class));
+        self::assertInstanceOf(NotifyAllCommand::class, $container->get(NotifyAllCommand::class));
+        self::assertInstanceOf(ChatbotWidgetRuntime::class, $container->get(ChatbotWidgetRuntime::class));
+        self::assertTrue($container->getDefinition(ChatbotWidgetExtension::class)->hasTag('twig.extension'));
+        self::assertTrue($container->getDefinition(ChatbotWidgetRuntime::class)->hasTag('twig.runtime'));
+    }
+
+    /**
+     * @return list<class-string>
+     */
+    private function getWiredServiceIds(): array
+    {
+        return [
+            SiteKeyResolver::class,
+            CatalogChangeNotifier::class,
+            CatalogChangeListener::class,
+            NotifyAllCommand::class,
+            DataSourceRegistry::class,
+            ChannelResolver::class,
+            ShopLocaleResolver::class,
+            ChatbotWidgetExtension::class,
+            ChatbotWidgetRuntime::class,
+        ];
+    }
+
+    private function keepOnlyWiredBundleServices(ContainerBuilder $container): void
+    {
+        $wiredServiceIds = $this->getWiredServiceIds();
+
+        foreach (array_keys($container->getDefinitions()) as $serviceId) {
+            $isBundleService = str_starts_with($serviceId, 'FluffyDiscord\\SyliusChatbotBundle\\');
+            if (!$isBundleService) {
+                continue;
+            }
+
+            $isWired = in_array($serviceId, $wiredServiceIds, true);
+            if ($isWired) {
+                $container->getDefinition($serviceId)->setPublic(true);
+
+                continue;
+            }
+
+            $container->removeDefinition($serviceId);
+        }
+    }
+
+    /**
+     * @return array<string, class-string>
+     */
+    private function getShopServiceClasses(): array
+    {
+        return [
+            HttpClientInterface::class => HttpClientInterface::class,
+            LoggerInterface::class => LoggerInterface::class,
+            ChannelRepositoryInterface::class => ChannelRepositoryInterface::class,
+            ChannelContextInterface::class => ChannelContextInterface::class,
+            'sylius.provider.locale_collection' => LocaleCollectionProviderInterface::class,
+        ];
+    }
+
+    private function registerShopServices(ContainerBuilder $container): void
+    {
+        foreach ($this->getShopServiceClasses() as $serviceId => $serviceClass) {
+            $container->register($serviceId, $serviceClass)->setSynthetic(true)->setPublic(true);
+        }
+    }
+
+    private function setShopServices(ContainerBuilder $container): void
+    {
+        foreach ($this->getShopServiceClasses() as $serviceId => $serviceClass) {
+            $container->set($serviceId, $this->createStub($serviceClass));
+        }
     }
 
     /**
