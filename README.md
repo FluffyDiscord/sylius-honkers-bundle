@@ -14,6 +14,7 @@ Requires PHP `^8.2` and Sylius `^1.14 || ^2.2 || ^2.3`.
 | `doctrine/orm` | `^2.20 \|\| ^3.6 \|\| ^4.0` |
 | `doctrine/doctrine-bundle` | `^2.13 \|\| ^3.2 \|\| ^4.0` |
 | `symfony/*` | `^6.4 \|\| ^7.4 \|\| ^8.0` |
+| `twig/twig` | `^2.12 \|\| ^3.3` |
 
 The `@alpha` on `sylius/sylius` is only because 2.3 has no stable tag yet (`v2.3.0-ALPHA.1`); it drops once 2.3 ships stable.
 
@@ -96,9 +97,11 @@ fluffy_discord_sylius_chatbot:
 ```
 
 - A channel's site key is `channel_site_keys[<channel code>]`, else `site_key`. An entry is authoritative: a channel mapped to an empty value has no site key, it never falls back.
+- `site_key` is optional once `channel_site_keys` has an entry; it then only serves unmapped channels.
 - Keys are channel codes (not normalized, `cz-web` stays `cz-web`), values are strings — literal or `%env()%`.
 - `api_secret` and `ingest_secret` stay shared: every site must have the same shop tool-server secret and ingest secret configured.
-- Empty `channel_site_keys` (the default) behaves exactly like a single-site shop.
+- With channel keys set, **disabled** channels get no catalog notifications and `notify-all --channel=<disabled>` is refused.
+- Empty `channel_site_keys` (the default) behaves like a single-site shop: channels, enabled or not, are never consulted for notifications.
 
 ### 5. Security
 
@@ -248,9 +251,9 @@ Which site receives a `(source, locale)`:
 | empty | the `widget.site_key` site, for every locale |
 | set | the site of every **enabled** channel serving that locale; channels resolving to the same site key share one request |
 
-With channel keys set, a channel without a resolvable key is skipped with a warning, and a locale no enabled channel serves is sent nowhere. The 500-id batching and the single 5 s flush budget cover every site's requests together.
+With channel keys set, an enabled channel that serves a changed locale but resolves no key (unmapped, `site_key` empty) is skipped with a warning; a channel mapped to an empty value is skipped with a debug record. A locale no enabled channel serves is sent nowhere. The 500-id batching and the single 5 s flush budget cover every site's requests together.
 
-`bin/console fluffydiscord:chatbot:notify-all [--source=products|categories] [--locale=cs_CZ] [--channel=code]` re-announces the whole catalog in 500-id batches, pausing 2 s between batches and honouring `Retry-After` on a 429. Pass `--channel` when no channel can be resolved from the CLI context; without `--locale` the locales are taken from the resolved channel, so each channel's catalog is paired with the locales that channel actually serves. The catalog goes to the resolved channel's site only; a channel without a site key aborts the run. On a multi-site shop run it once per channel. A `--locale` the source does not serve aborts the run instead of announcing a locale the backend cannot use.
+`bin/console fluffydiscord:chatbot:notify-all [--source=products|categories] [--locale=cs_CZ] [--channel=code]` re-announces the whole catalog in 500-id batches, pausing 2 s between batches and honouring `Retry-After` on a 429. Pass `--channel` when no channel can be resolved from the CLI context; without `--locale` the locales are taken from the resolved channel, so each channel's catalog is paired with the locales that channel actually serves. Without channel keys the catalog goes to the `widget.site_key` site. With channel keys it goes to the resolved channel's site only, and a disabled channel or one without a site key aborts the run; run it once per channel. A `--locale` the source does not serve aborts the run instead of announcing a locale the backend cannot use.
 
 ## Widget
 
@@ -261,7 +264,7 @@ When `widget.enabled` is true the bundle injects, via the `sylius_shop.base#java
 <ai-chat-widget site-key="{site_key}" locale="{app.locale}" backend-url="{backend_url}"></ai-chat-widget>
 ```
 
-`site_key` is resolved at render time by the `fluffydiscord_chatbot_site_key(fallback)` Twig function: the current channel's `widget.channel_site_keys` entry, else the template's own `site_key`. The shop's `ChannelContextInterface` decides the channel; without a resolvable channel the fallback is used.
+`site_key` is resolved at render time by the `fluffydiscord_chatbot_site_key(fallback)` Twig function: the current channel's `widget.channel_site_keys` entry, else the template's own `site_key`. The shop's `ChannelContextInterface` decides the channel; without a resolvable channel the fallback is used. When the resolved key is empty nothing is rendered — neither the script nor the element.
 
 The template can also be included directly with a plain context — the channel key is still applied:
 
