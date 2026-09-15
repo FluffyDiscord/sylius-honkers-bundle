@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\Ingest;
 
+use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusChatbotBundle\DTO\NotificationOutcome;
 use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
 use Psr\Log\LoggerInterface;
@@ -28,15 +29,13 @@ class CatalogChangeNotifier implements ResetInterface
     public function __construct(
         private readonly HttpClientInterface $backendClient,
         private readonly LoggerInterface     $logger,
+        private readonly SiteKeyResolver     $siteKeyResolver,
 
         #[Autowire(param: 'fluffydiscord_sylius_chatbot.backend_url')]
         private readonly string $backendUrl,
 
         #[Autowire(param: 'fluffydiscord_sylius_chatbot.ingest_secret')]
         private readonly string $ingestSecret,
-
-        #[Autowire(param: 'fluffydiscord_sylius_chatbot.widget.site_key')]
-        private readonly string $siteKey,
 
         #[Autowire(param: 'kernel.environment')]
         private readonly string $environment,
@@ -65,7 +64,8 @@ class CatalogChangeNotifier implements ResetInterface
         if ($this->ingestSecret === '') {
             $missingKeys[] = 'ingest_secret';
         }
-        if ($this->siteKey === '') {
+        $hasAnySiteKey = $this->siteKeyResolver->hasAnySiteKey();
+        if (!$hasAnySiteKey) {
             $missingKeys[] = 'widget.site_key';
         }
 
@@ -111,15 +111,27 @@ class CatalogChangeNotifier implements ResetInterface
             return;
         }
 
-        $responses = $this->issueRequests($pendingChanges);
+        try {
+            $siteKeysByLocale = $this->getSiteKeysByLocale($pendingChanges);
+        } catch (\Throwable $exception) {
+            $this->logger->warning('Chatbot: resolving the sites to notify about catalog changes failed.', ['exception' => $exception]);
+
+            return;
+        }
+
+        $responses = $this->issueRequests($pendingChanges, $siteKeysByLocale);
         $this->drainWithinBudget($responses);
     }
 
     /**
      * @param list<string> $externalIds
      */
-    public function notify(CatalogSourceName $source, string $locale, array $externalIds): NotificationOutcome
-    {
+    public function notify(
+        CatalogSourceName $source,
+        string $locale,
+        array $externalIds,
+        ?string $channelCode = null,
+    ): NotificationOutcome {
         if ($externalIds === []) {
             return new NotificationOutcome(true);
         }
@@ -129,12 +141,21 @@ class CatalogChangeNotifier implements ResetInterface
             return new NotificationOutcome(false);
         }
 
+        $siteKey = $this->resolveSiteKey($channelCode);
+        if ($siteKey === '') {
+            $this->logger->warning('Chatbot: the channel has no site key, skipping its catalog notifications.', [
+                'channelCode' => $channelCode,
+            ]);
+
+            return new NotificationOutcome(false);
+        }
+
         try {
-            $response = $this->requestChanges($source, $locale, $externalIds);
+            $response = $this->requestChanges($source, $locale, $externalIds, $siteKey);
 
             return $this->readOutcome($response);
         } catch (\Throwable $exception) {
-            $this->logFailure($source, $locale, $exception);
+            $this->logFailure($source, $locale, $siteKey, $exception);
 
             return new NotificationOutcome(false);
         }
@@ -193,27 +214,65 @@ class CatalogChangeNotifier implements ResetInterface
         ]);
     }
 
+    private function resolveSiteKey(?string $channelCode): string
+    {
+        if ($channelCode === null) {
+            return $this->siteKeyResolver->getDefaultSiteKey();
+        }
+
+        return $this->siteKeyResolver->getSiteKey($channelCode);
+    }
+
     /**
      * @param array<string, array{source: CatalogSourceName, locale: string, externalIds: array<string, true>}> $pendingChanges
      *
+     * @return array<string, list<string>>
+     */
+    private function getSiteKeysByLocale(array $pendingChanges): array
+    {
+        $locales = [];
+        foreach ($pendingChanges as $change) {
+            $locales[$change['locale']] = $change['locale'];
+        }
+
+        return $this->siteKeyResolver->getSiteKeysByLocale(array_values($locales));
+    }
+
+    /**
+     * @param array<string, array{source: CatalogSourceName, locale: string, externalIds: array<string, true>}> $pendingChanges
+     * @param array<string, list<string>>                                                                         $siteKeysByLocale
+     *
      * @return list<ResponseInterface>
      */
-    private function issueRequests(array $pendingChanges): array
+    private function issueRequests(array $pendingChanges, array $siteKeysByLocale): array
     {
         $responses = [];
         foreach ($pendingChanges as $change) {
             $externalIds = array_keys($change['externalIds']);
             $batches = array_chunk($externalIds, $this->getMaxExternalIdsPerRequest());
-            foreach ($batches as $batch) {
-                try {
-                    $responses[] = $this->requestChanges($change['source'], $change['locale'], $batch);
-                } catch (\Throwable $exception) {
-                    $this->logFailure($change['source'], $change['locale'], $exception);
+            $siteKeys = $siteKeysByLocale[$change['locale']] ?? [];
+            foreach ($siteKeys as $siteKey) {
+                foreach ($batches as $batch) {
+                    $responses[] = $this->issueRequest($change['source'], $change['locale'], $batch, $siteKey);
                 }
             }
         }
 
-        return $responses;
+        return array_values(array_filter($responses));
+    }
+
+    /**
+     * @param list<string> $externalIds
+     */
+    private function issueRequest(CatalogSourceName $source, string $locale, array $externalIds, string $siteKey): ?ResponseInterface
+    {
+        try {
+            return $this->requestChanges($source, $locale, $externalIds, $siteKey);
+        } catch (\Throwable $exception) {
+            $this->logFailure($source, $locale, $siteKey, $exception);
+
+            return null;
+        }
     }
 
     /**
@@ -304,13 +363,13 @@ class CatalogChangeNotifier implements ResetInterface
     /**
      * @param list<string> $externalIds
      */
-    private function requestChanges(CatalogSourceName $source, string $locale, array $externalIds): ResponseInterface
+    private function requestChanges(CatalogSourceName $source, string $locale, array $externalIds, string $siteKey): ResponseInterface
     {
         return $this->backendClient->request(Request::METHOD_POST, $this->buildChangesUrl(), [
             'timeout' => $this->getTimeoutSeconds(),
             'max_duration' => $this->getMaxDurationSeconds(),
-            'user_data' => $source->value . ' / ' . $locale,
-            'headers' => ['Authorization' => 'Bearer ' . $this->siteKey . '.' . $this->ingestSecret],
+            'user_data' => $this->buildRequestTarget($source, $locale, $siteKey),
+            'headers' => ['Authorization' => 'Bearer ' . $siteKey . '.' . $this->ingestSecret],
             'json' => [
                 'source' => $source->value,
                 'locale' => $locale,
@@ -347,12 +406,17 @@ class CatalogChangeNotifier implements ResetInterface
         return new NotificationOutcome(false);
     }
 
-    private function logFailure(CatalogSourceName $source, string $locale, \Throwable $exception): void
+    private function logFailure(CatalogSourceName $source, string $locale, string $siteKey, \Throwable $exception): void
     {
         $this->logger->warning('Chatbot: notifying the backend about catalog changes failed.', [
-            'target' => $source->value . ' / ' . $locale,
+            'target' => $this->buildRequestTarget($source, $locale, $siteKey),
             'exception' => $exception,
         ]);
+    }
+
+    private function buildRequestTarget(CatalogSourceName $source, string $locale, string $siteKey): string
+    {
+        return $source->value . ' / ' . $locale . ' / ' . $siteKey;
     }
 
     private function buildChangesUrl(): string

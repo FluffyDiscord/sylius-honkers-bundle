@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FluffyDiscord\SyliusChatbotBundle\Command;
 
 use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotDataSourceInterface;
 use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
 use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
@@ -32,6 +33,7 @@ class NotifyAllCommand extends Command
         private readonly CatalogChangeNotifier $catalogChangeNotifier,
         private readonly ChannelResolver       $channelResolver,
         private readonly ShopLocaleResolver    $localeResolver,
+        private readonly SiteKeyResolver       $siteKeyResolver,
     ) {
         parent::__construct();
     }
@@ -80,8 +82,20 @@ class NotifyAllCommand extends Command
         $this->channelResolver->setOverrideCode($channel);
 
         try {
+            $channelCode = (string) $this->channelResolver->getChannel()->getCode();
+            $siteKey = $this->siteKeyResolver->getSiteKey($channelCode);
+            if ($siteKey === '') {
+                $io->error(sprintf(
+                    'The channel "%s" has no site key, nothing can be announced. Set: widget.channel_site_keys.%s or widget.site_key.',
+                    $channelCode,
+                    $channelCode,
+                ));
+
+                return Command::FAILURE;
+            }
+
             $requestedLocale = $this->resolveRequestedLocale($locale);
-            $failedBatchCount = $this->notifySources($io, $sources, $requestedLocale);
+            $failedBatchCount = $this->notifySources($io, $sources, $requestedLocale, $channelCode);
         } catch (InvalidChannelException $exception) {
             $io->error(sprintf(
                 'No channel could be resolved (%s). Pass --channel=<code> when running outside a web request.',
@@ -119,7 +133,7 @@ class NotifyAllCommand extends Command
     /**
      * @param list<CatalogSourceName> $sources
      */
-    private function notifySources(SymfonyStyle $io, array $sources, ?string $locale): int
+    private function notifySources(SymfonyStyle $io, array $sources, ?string $locale, string $channelCode): int
     {
         $failedBatchCount = 0;
         foreach ($sources as $source) {
@@ -132,7 +146,7 @@ class NotifyAllCommand extends Command
 
             foreach ($this->resolveLocales($dataSource, $locale) as $localeCode) {
                 try {
-                    $failedBatchCount += $this->notifyLocale($io, $source, $dataSource, $localeCode);
+                    $failedBatchCount += $this->notifyLocale($io, $source, $dataSource, $localeCode, $channelCode);
                 } catch (ChatbotApiException $exception) {
                     $io->error(sprintf('%s: %s', $source->value, $exception->getMessage()));
                     ++$failedBatchCount;
@@ -150,6 +164,7 @@ class NotifyAllCommand extends Command
         CatalogSourceName $source,
         ChatbotDataSourceInterface $dataSource,
         string $locale,
+        string $channelCode,
     ): int {
         $batchSize = $this->catalogChangeNotifier->getMaxExternalIdsPerRequest();
         $externalIds = [];
@@ -166,7 +181,7 @@ class NotifyAllCommand extends Command
                     continue;
                 }
 
-                $failedBatchCount += $this->sendBatch($io, $source, $locale, $externalIds);
+                $failedBatchCount += $this->sendBatch($io, $source, $locale, $externalIds, $channelCode);
                 $notifiedCount += count($externalIds);
                 $externalIds = [];
             }
@@ -175,7 +190,7 @@ class NotifyAllCommand extends Command
         } while ($cursor !== null);
 
         if ($externalIds !== []) {
-            $failedBatchCount += $this->sendBatch($io, $source, $locale, $externalIds);
+            $failedBatchCount += $this->sendBatch($io, $source, $locale, $externalIds, $channelCode);
             $notifiedCount += count($externalIds);
         }
 
@@ -187,12 +202,17 @@ class NotifyAllCommand extends Command
     /**
      * @param list<string> $externalIds
      */
-    private function sendBatch(SymfonyStyle $io, CatalogSourceName $source, string $locale, array $externalIds): int
-    {
+    private function sendBatch(
+        SymfonyStyle $io,
+        CatalogSourceName $source,
+        string $locale,
+        array $externalIds,
+        string $channelCode,
+    ): int {
         $remainingRetries = $this->getMaxThrottleRetries();
 
         while (true) {
-            $outcome = $this->catalogChangeNotifier->notify($source, $locale, $externalIds);
+            $outcome = $this->catalogChangeNotifier->notify($source, $locale, $externalIds, $channelCode);
             if ($outcome->accepted) {
                 sleep($this->getBatchPauseSeconds());
 

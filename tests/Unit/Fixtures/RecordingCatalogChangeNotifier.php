@@ -7,20 +7,23 @@ namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures;
 use FluffyDiscord\SyliusChatbotBundle\DTO\NotificationOutcome;
 use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
-use Psr\Log\NullLogger;
-use Symfony\Component\HttpClient\MockHttpClient;
 
 class RecordingCatalogChangeNotifier extends CatalogChangeNotifier
 {
     /** @var list<array{0: CatalogSourceName, 1: string, 2: string}> */
     public array $collectedChanges = [];
 
-    /** @var list<array{0: CatalogSourceName, 1: string, 2: list<string>}> */
+    /** @var list<array{0: CatalogSourceName, 1: string, 2: list<string>, 3: ?string}> */
     public array $notifications = [];
 
-    public function __construct()
+    public function __construct(
+        private readonly bool $acceptsNotifications = true,
+    ) {
+    }
+
+    public function getMissingConfigurationKeys(): array
     {
-        parent::__construct(new MockHttpClient(), new NullLogger(), 'https://backend.test', 'secret', 'site-key', 'test');
+        return [];
     }
 
     public function collect(CatalogSourceName $source, string $locale, string $externalId): void
@@ -28,10 +31,14 @@ class RecordingCatalogChangeNotifier extends CatalogChangeNotifier
         $this->collectedChanges[] = [$source, $locale, $externalId];
     }
 
-    public function notify(CatalogSourceName $source, string $locale, array $externalIds): NotificationOutcome
-    {
-        $this->notifications[] = [$source, $locale, $externalIds];
+    public function notify(
+        CatalogSourceName $source,
+        string $locale,
+        array $externalIds,
+        ?string $channelCode = null,
+    ): NotificationOutcome {
+        $this->notifications[] = [$source, $locale, $externalIds, $channelCode];
 
-        return new NotificationOutcome(true);
+        return new NotificationOutcome($this->acceptsNotifications);
     }
 }

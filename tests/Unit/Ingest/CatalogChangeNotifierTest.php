@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Ingest;
 
+use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
@@ -16,10 +20,17 @@ class CatalogChangeNotifierTest extends TestCase
     /** @var list<array{url: string, options: array}> */
     private array $capturedRequests = [];
 
+    /**
+     * @param array<string, string>                                        $channelSiteKeys
+     * @param array<string, array{locales: list<string>, enabled?: bool}> $channelDefinitions
+     */
     private function createNotifier(
         array $responses,
         string $backendUrl = 'https://backend.example',
         string $environment = 'prod',
+        string $defaultSiteKey = 'site-key',
+        array $channelSiteKeys = [],
+        array $channelDefinitions = [],
     ): CatalogChangeNotifier {
         $client = new MockHttpClient(function (string $method, string $url, array $options) use (&$responses): MockResponse {
             $this->capturedRequests[] = ['url' => $url, 'options' => $options];
@@ -27,14 +38,230 @@ class CatalogChangeNotifierTest extends TestCase
             return array_shift($responses) ?? new MockResponse('', ['http_code' => 202]);
         });
 
+        $channels = (new ChannelFixtureFactory())->createChannels($channelDefinitions);
+        $channelRepository = $this->createStub(ChannelRepositoryInterface::class);
+        $channelRepository->method('findAll')->willReturn($channels);
+
         return new CatalogChangeNotifier(
             $client,
             new NullLogger(),
+            new SiteKeyResolver($channelRepository, new NullLogger(), $defaultSiteKey, $channelSiteKeys),
             $backendUrl,
             'ingest-secret',
-            'site-key',
             $environment,
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function getCapturedSiteRequests(): array
+    {
+        $siteRequests = [];
+
+        foreach ($this->capturedRequests as $request) {
+            $body = json_decode($request['options']['body'], true);
+            $authorization = $this->readAuthorization($request['options']['headers']);
+            $siteRequests[] = sprintf('%s %s %s -> %s', $body['source'], $body['locale'], implode(',', $body['externalIds']), $authorization);
+        }
+
+        return $siteRequests;
+    }
+
+    /**
+     * @param list<string> $headers
+     */
+    private function readAuthorization(array $headers): string
+    {
+        foreach ($headers as $header) {
+            $isAuthorization = str_starts_with($header, 'Authorization: Bearer ');
+            if ($isAuthorization) {
+                return substr($header, strlen('Authorization: Bearer '));
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, string>                                        $channelSiteKeys
+     * @param array<string, array{locales: list<string>, enabled?: bool}> $channelDefinitions
+     * @param list<array{string, string}>                                  $collectedChanges
+     * @param list<string>                                                 $expectedSiteRequests
+     */
+    #[DataProvider('provideSiteRouting')]
+    public function testFlushSendsEveryChangeToEverySiteServingItsLocale(
+        string $defaultSiteKey,
+        array $channelSiteKeys,
+        array $channelDefinitions,
+        array $collectedChanges,
+        array $expectedSiteRequests,
+    ): void {
+        $notifier = $this->createNotifier([], defaultSiteKey: $defaultSiteKey, channelSiteKeys: $channelSiteKeys, channelDefinitions: $channelDefinitions);
+
+        foreach ($collectedChanges as [$locale, $externalId]) {
+            $notifier->collect(CatalogSourceName::Products, $locale, $externalId);
+        }
+        $notifier->flush();
+
+        self::assertSame($expectedSiteRequests, $this->getCapturedSiteRequests());
+    }
+
+    /**
+     * @return iterable<string, array{string, array<string, string>, array<string, array{locales: list<string>, enabled?: bool}>, list<array{string, string}>, list<string>}>
+     */
+    public static function provideSiteRouting(): iterable
+    {
+        $shopChannels = [
+            'CZ' => ['locales' => ['cs_CZ']],
+            'SK' => ['locales' => ['sk_SK']],
+            'DE' => ['locales' => ['de_DE']],
+            'AT' => ['locales' => ['de_DE']],
+        ];
+
+        yield 'without channel keys one request per locale reaches the default site' => [
+            'site-key',
+            [],
+            $shopChannels,
+            [['cs_CZ', 'A'], ['sk_SK', 'A'], ['ru_RU', 'A']],
+            [
+                'products cs_CZ A -> site-key.ingest-secret',
+                'products sk_SK A -> site-key.ingest-secret',
+                'products ru_RU A -> site-key.ingest-secret',
+            ],
+        ];
+
+        yield 'every channel locale reaches its own site only' => [
+            '',
+            ['CZ' => 'cz-key', 'SK' => 'sk-key', 'DE' => 'de-key', 'AT' => 'at-key'],
+            $shopChannels,
+            [['cs_CZ', 'A'], ['cs_CZ', 'B'], ['sk_SK', 'A']],
+            [
+                'products cs_CZ A,B -> cz-key.ingest-secret',
+                'products sk_SK A -> sk-key.ingest-secret',
+            ],
+        ];
+
+        yield 'a locale served by two sites reaches both' => [
+            '',
+            ['CZ' => 'cz-key', 'SK' => 'sk-key', 'DE' => 'de-key', 'AT' => 'at-key'],
+            $shopChannels,
+            [['de_DE', 'A']],
+            [
+                'products de_DE A -> de-key.ingest-secret',
+                'products de_DE A -> at-key.ingest-secret',
+            ],
+        ];
+
+        yield 'two channels on one site key share one request' => [
+            '',
+            ['CZ' => 'cz-key', 'SK' => 'sk-key', 'DE' => 'dach-key', 'AT' => 'dach-key'],
+            $shopChannels,
+            [['de_DE', 'A']],
+            ['products de_DE A -> dach-key.ingest-secret'],
+        ];
+
+        yield 'an unmapped channel falls back to the default site' => [
+            'site-key',
+            ['CZ' => 'cz-key'],
+            $shopChannels,
+            [['cs_CZ', 'A'], ['sk_SK', 'A'], ['de_DE', 'A']],
+            [
+                'products cs_CZ A -> cz-key.ingest-secret',
+                'products sk_SK A -> site-key.ingest-secret',
+                'products de_DE A -> site-key.ingest-secret',
+            ],
+        ];
+
+        yield 'a channel without a resolvable key is skipped' => [
+            '',
+            ['CZ' => 'cz-key'],
+            $shopChannels,
+            [['cs_CZ', 'A'], ['sk_SK', 'A']],
+            ['products cs_CZ A -> cz-key.ingest-secret'],
+        ];
+    }
+
+    public function testEverySiteGetsItsOwnFiveHundredIdBatches(): void
+    {
+        $notifier = $this->createNotifier(
+            [],
+            defaultSiteKey: '',
+            channelSiteKeys: ['DE' => 'de-key', 'AT' => 'at-key'],
+            channelDefinitions: ['DE' => ['locales' => ['de_DE']], 'AT' => ['locales' => ['de_DE']]],
+        );
+
+        for ($index = 0; $index < 501; ++$index) {
+            $notifier->collect(CatalogSourceName::Products, 'de_DE', 'CODE-' . $index);
+        }
+        $notifier->flush();
+
+        $batchSizesBySite = [];
+        foreach ($this->capturedRequests as $request) {
+            $body = json_decode($request['options']['body'], true);
+            $batchSizesBySite[$this->readAuthorization($request['options']['headers'])][] = count($body['externalIds']);
+        }
+
+        self::assertSame(['de-key.ingest-secret' => [500, 1], 'at-key.ingest-secret' => [500, 1]], $batchSizesBySite);
+    }
+
+    /**
+     * @param array<string, string> $channelSiteKeys
+     */
+    #[DataProvider('provideChannelNotifications')]
+    public function testNotifyUsesTheSiteKeyOfTheGivenChannel(
+        string $defaultSiteKey,
+        array $channelSiteKeys,
+        ?string $channelCode,
+        ?string $expectedAuthorization,
+    ): void {
+        $notifier = $this->createNotifier([], defaultSiteKey: $defaultSiteKey, channelSiteKeys: $channelSiteKeys);
+
+        $outcome = $notifier->notify(CatalogSourceName::Products, 'cs_CZ', ['T-SHIRT-01'], $channelCode);
+
+        $expectedRequestCount = $expectedAuthorization === null ? 0 : 1;
+        self::assertSame($expectedAuthorization !== null, $outcome->accepted);
+        self::assertCount($expectedRequestCount, $this->capturedRequests);
+        foreach ($this->capturedRequests as $request) {
+            self::assertSame($expectedAuthorization, $this->readAuthorization($request['options']['headers']));
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string, array<string, string>, ?string, ?string}>
+     */
+    public static function provideChannelNotifications(): iterable
+    {
+        yield 'mapped channel' => ['site-key', ['CZ' => 'cz-key'], 'CZ', 'cz-key.ingest-secret'];
+        yield 'unmapped channel falls back' => ['site-key', ['CZ' => 'cz-key'], 'SK', 'site-key.ingest-secret'];
+        yield 'no channel uses the default' => ['site-key', ['CZ' => 'cz-key'], null, 'site-key.ingest-secret'];
+        yield 'unmapped channel without default is refused' => ['', ['CZ' => 'cz-key'], 'SK', null];
+        yield 'no channel without default is refused' => ['', ['CZ' => 'cz-key'], null, null];
+    }
+
+    /**
+     * @param array<string, string> $channelSiteKeys
+     * @param list<string>          $expectedMissingKeys
+     */
+    #[DataProvider('provideSiteKeyConfigurations')]
+    public function testTheSiteKeyIsMissingOnlyWithoutDefaultAndChannelKeys(
+        string $defaultSiteKey,
+        array $channelSiteKeys,
+        array $expectedMissingKeys,
+    ): void {
+        $notifier = $this->createNotifier([], defaultSiteKey: $defaultSiteKey, channelSiteKeys: $channelSiteKeys);
+
+        self::assertSame($expectedMissingKeys, $notifier->getMissingConfigurationKeys());
+    }
+
+    /**
+     * @return iterable<string, array{string, array<string, string>, list<string>}>
+     */
+    public static function provideSiteKeyConfigurations(): iterable
+    {
+        yield 'default key' => ['site-key', [], []];
+        yield 'channel keys only' => ['', ['CZ' => 'cz-key'], []];
+        yield 'neither' => ['', [], ['widget.site_key']];
     }
 
     public function testFlushPostsOnePayloadPerSourceAndLocale(): void
