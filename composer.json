@@ -25,7 +25,8 @@
         "symfony/security-http": "^6.4 || ^7.4 || ^8.0",
         "symfony/serializer": "^6.4 || ^7.4 || ^8.0",
         "symfony/translation": "^6.4 || ^7.4 || ^8.0",
-        "symfony/validator": "^6.4 || ^7.4 || ^8.0"
+        "symfony/validator": "^6.4 || ^7.4 || ^8.0",
+        "twig/twig": "^2.12 || ^3.3"
     },
     "require-dev": {
         "monsieurbiz/sylius-cms-page-plugin": "^2.2",
