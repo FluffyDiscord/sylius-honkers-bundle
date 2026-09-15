@@ -78,6 +78,28 @@ CHATBOT_SITE_KEY=site-key
 
 `ingest_secret` is the shop half of the catalog notification credential; the backend receives `Authorization: Bearer <site_key>.<ingest_secret>`. Outside the `dev` environment a non-`https` `backend_url` is refused and nothing is sent.
 
+#### One site per channel
+
+When each channel is its own site on the backend, map channel codes to site keys:
+
+```yaml
+fluffy_discord_sylius_chatbot:
+    api_secret: '%env(CHATBOT_API_SECRET)%'
+    backend_url: '%env(CHATBOT_BACKEND_URL)%'
+    ingest_secret: '%env(CHATBOT_INGEST_SECRET)%'
+    widget:
+        site_key: '%env(CHATBOT_SITE_KEY)%'
+        channel_site_keys:
+            CZ_WEB: '%env(CHATBOT_SITE_KEY_CZ)%'
+            SK_WEB: '%env(CHATBOT_SITE_KEY_SK)%'
+            DE_WEB: 'pk_live_de'
+```
+
+- A channel's site key is `channel_site_keys[<channel code>]`, else `site_key`. An entry is authoritative: a channel mapped to an empty value has no site key, it never falls back.
+- Keys are channel codes (not normalized, `cz-web` stays `cz-web`), values are strings — literal or `%env()%`.
+- `api_secret` and `ingest_secret` stay shared: every site must have the same shop tool-server secret and ingest secret configured.
+- Empty `channel_site_keys` (the default) behaves exactly like a single-site shop.
+
 ### 5. Security
 
 Add the `chatbot_api` firewall to `config/packages/security.yaml` **before** the Sylius `shop` firewall (firewalls match in order and `shop` matches `^/`):
@@ -217,9 +239,18 @@ Both are wired as container aliases; redefine the alias in the shop's `services.
 
 These keep the backend's ingested sources fresh. Saving a `Product`, a `ProductTranslation`, a `Taxon` or a `TaxonTranslation` collects the changed external ids and one `POST {backend_url}/api/v1/catalog/changes` per `(source, locale)` is sent on `kernel.terminate` and on `ConsoleEvents::TERMINATE` (max 500 ids per request, 2 s timeout, 5 s max duration). The whole flush shares a single 5 s wall-clock budget: the requests are issued together and drained in one `stream()` loop, and whatever has not finished when the budget is spent is abandoned — a dropped notification costs at most one nightly cycle of staleness.
 
-A `ProductTranslation` change announces its own locale only, a `TaxonTranslation` change announces `categories` for its own locale, a `Product` change announces every locale of `sylius_locale`, and a `Taxon` change announces `categories` for every locale without fanning out to its products. Every failure is logged as a warning and swallowed — a notification never breaks a shop request. With `backend_url`, `ingest_secret` or `widget.site_key` empty nothing is sent and a warning names the missing key.
+A `ProductTranslation` change announces its own locale only, a `TaxonTranslation` change announces `categories` for its own locale, a `Product` change announces every locale of `sylius_locale`, and a `Taxon` change announces `categories` for every locale without fanning out to its products. Every failure is logged as a warning and swallowed — a notification never breaks a shop request. With `backend_url` or `ingest_secret` empty, or with neither `widget.site_key` nor any `widget.channel_site_keys` entry set, nothing is sent and a warning names the missing key.
 
-`bin/console fluffydiscord:chatbot:notify-all [--source=products|categories] [--locale=cs_CZ] [--channel=code]` re-announces the whole catalog in 500-id batches, pausing 2 s between batches and honouring `Retry-After` on a 429. Pass `--channel` when no channel can be resolved from the CLI context; without `--locale` the locales are taken from the resolved channel, so each channel's catalog is paired with the locales that channel actually serves. A `--locale` the source does not serve aborts the run instead of announcing a locale the backend cannot use.
+Which site receives a `(source, locale)`:
+
+| `widget.channel_site_keys` | Recipients |
+|---|---|
+| empty | the `widget.site_key` site, for every locale |
+| set | the site of every **enabled** channel serving that locale; channels resolving to the same site key share one request |
+
+With channel keys set, a channel without a resolvable key is skipped with a warning, and a locale no enabled channel serves is sent nowhere. The 500-id batching and the single 5 s flush budget cover every site's requests together.
+
+`bin/console fluffydiscord:chatbot:notify-all [--source=products|categories] [--locale=cs_CZ] [--channel=code]` re-announces the whole catalog in 500-id batches, pausing 2 s between batches and honouring `Retry-After` on a 429. Pass `--channel` when no channel can be resolved from the CLI context; without `--locale` the locales are taken from the resolved channel, so each channel's catalog is paired with the locales that channel actually serves. The catalog goes to the resolved channel's site only; a channel without a site key aborts the run. On a multi-site shop run it once per channel. A `--locale` the source does not serve aborts the run instead of announcing a locale the backend cannot use.
 
 ## Widget
 
@@ -228,6 +259,18 @@ When `widget.enabled` is true the bundle injects, via the `sylius_shop.base#java
 ```html
 <script src="{widget_cdn_url}" defer></script>
 <ai-chat-widget site-key="{site_key}" locale="{app.locale}" backend-url="{backend_url}"></ai-chat-widget>
+```
+
+`site_key` is resolved at render time by the `fluffydiscord_chatbot_site_key(fallback)` Twig function: the current channel's `widget.channel_site_keys` entry, else the template's own `site_key`. The shop's `ChannelContextInterface` decides the channel; without a resolvable channel the fallback is used.
+
+The template can also be included directly with a plain context — the channel key is still applied:
+
+```twig
+{% include '@FluffyDiscordSyliusChatbot/shop/widget.html.twig' with {
+    backend_url: 'https://chatbot.example.com',
+    site_key: 'site-key',
+    widget_cdn_url: '',
+} only %}
 ```
 
 `widget_cdn_url` defaults to `{backend_url}/widget/v1/chat.js` when `widget.cdn_url` is unset. The widget talks only to the backend at `backend_url`; it never calls `/chatbot/v1` itself. Tool calls and source ingestion are the backend's job — the widget only renders what the backend streams back.
