@@ -4,9 +4,17 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Widget;
 
+use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetExtension;
+use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use Sylius\Component\Channel\Context\ChannelContextInterface;
+use Sylius\Component\Channel\Context\ChannelNotFoundException;
+use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
+use Twig\RuntimeLoader\FactoryRuntimeLoader;
 
 class WidgetTemplateTest extends TestCase
 {
@@ -35,6 +43,15 @@ class WidgetTemplateTest extends TestCase
     {
         $loader = new FilesystemLoader(dirname(__DIR__, 3) . '/templates');
         $twig = new Environment($loader);
+        $twig->addExtension(new ChatbotWidgetExtension());
+
+        $channelContext = $this->createStub(ChannelContextInterface::class);
+        $channelContext->method('getChannel')->willThrowException(new ChannelNotFoundException());
+        $siteKeyResolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), new NullLogger(), 'pk_test', []);
+        $runtime = new ChatbotWidgetRuntime($channelContext, $siteKeyResolver);
+        $twig->addRuntimeLoader(new FactoryRuntimeLoader([
+            ChatbotWidgetRuntime::class => fn (): ChatbotWidgetRuntime => $runtime,
+        ]));
 
         return $twig->render('shop/widget.html.twig', [
             'app' => ['locale' => 'cs_CZ'],

@@ -1,4 +1,5 @@
 {% set widget = hookable_metadata is defined ? hookable_metadata.context : _context %}
 {% set scriptUrl = widget.widget_cdn_url ?: widget.backend_url ~ '/widget/v1/chat.js' %}
+{% set siteKey = fluffydiscord_chatbot_site_key(widget.site_key) %}
 <script src="{{ scriptUrl }}" defer></script>
-<ai-chat-widget site-key="{{ widget.site_key }}" locale="{{ app.locale }}" backend-url="{{ widget.backend_url }}"></ai-chat-widget>
+<ai-chat-widget site-key="{{ siteKey }}" locale="{{ app.locale }}" backend-url="{{ widget.backend_url }}"></ai-chat-widget>
