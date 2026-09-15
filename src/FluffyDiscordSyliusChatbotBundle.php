@@ -43,6 +43,20 @@ class FluffyDiscordSyliusChatbotBundle extends AbstractBundle
                             )
                         ->end()
                         ->scalarNode('site_key')->defaultValue('')->end()
+                        ->arrayNode('channel_site_keys')
+                            ->useAttributeAsKey('channel')
+                            ->normalizeKeys(false)
+                            ->validate()
+                                ->ifTrue(fn (array $channelSiteKeys): bool => $this->hasEmptyChannelCode($channelSiteKeys))
+                                ->thenInvalid('Every channel site key must be keyed by a non-empty channel code, got %s.')
+                            ->end()
+                            ->scalarPrototype()
+                                ->validate()
+                                    ->ifTrue(fn (mixed $siteKey): bool => !is_string($siteKey))
+                                    ->thenInvalid('Every channel site key must be a string, got %s.')
+                                ->end()
+                            ->end()
+                        ->end()
                         ->scalarNode('cdn_url')->defaultValue('')->end()
                     ->end()
                 ->end()
@@ -86,7 +100,8 @@ class FluffyDiscordSyliusChatbotBundle extends AbstractBundle
             ->set('fluffydiscord_sylius_chatbot.ingest_secret', $config['ingest_secret'])
             ->set('fluffydiscord_sylius_chatbot.widget.enabled', $config['widget']['enabled'])
             ->set('fluffydiscord_sylius_chatbot.widget.backend_url', $backendUrl)
-            ->set('fluffydiscord_sylius_chatbot.widget.site_key', $config['widget']['site_key']);
+            ->set('fluffydiscord_sylius_chatbot.widget.site_key', $config['widget']['site_key'])
+            ->set('fluffydiscord_sylius_chatbot.widget.channel_site_keys', $config['widget']['channel_site_keys']);
 
         $configurator->import(__DIR__ . '/../config/services.php');
 
@@ -147,6 +162,16 @@ class FluffyDiscordSyliusChatbotBundle extends AbstractBundle
                 ],
             ],
         ]);
+    }
+
+    /**
+     * @param array<array-key, mixed> $channelSiteKeys
+     */
+    private function hasEmptyChannelCode(array $channelSiteKeys): bool
+    {
+        $channelCodes = array_map('strval', array_keys($channelSiteKeys));
+
+        return in_array('', $channelCodes, true);
     }
 
     private function getWidgetTemplate(): string

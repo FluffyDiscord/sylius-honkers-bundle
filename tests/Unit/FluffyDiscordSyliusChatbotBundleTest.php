@@ -6,7 +6,10 @@ namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit;
 
 use FluffyDiscord\SyliusChatbotBundle\FluffyDiscordSyliusChatbotBundle;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\NamedExtension;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
+use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -52,6 +55,95 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
 
         self::assertSame([], $container->getExtensionConfig('sylius_ui'));
         self::assertSame([], $container->getExtensionConfig('sylius_twig_hooks'));
+    }
+
+    public function testTheChannelSiteKeysDefaultToNone(): void
+    {
+        $config = $this->processConfiguration(['api_secret' => 'secret']);
+
+        self::assertSame([], $config['widget']['channel_site_keys']);
+    }
+
+    /**
+     * @param array<array-key, string> $channelSiteKeys
+     */
+    #[DataProvider('provideValidChannelSiteKeys')]
+    public function testValidChannelSiteKeysAreKeptVerbatim(array $channelSiteKeys): void
+    {
+        $config = $this->processConfiguration([
+            'api_secret' => 'secret',
+            'widget' => ['channel_site_keys' => $channelSiteKeys],
+        ]);
+
+        self::assertSame($channelSiteKeys, $config['widget']['channel_site_keys']);
+    }
+
+    /**
+     * @return iterable<string, array{array<array-key, string>}>
+     */
+    public static function provideValidChannelSiteKeys(): iterable
+    {
+        yield 'literal keys' => [['CZ_WEB' => 'cz-key', 'SK_WEB' => 'sk-key']];
+        yield 'env placeholders' => [['CZ_WEB' => '%env(CHATBOT_SITE_KEY_CZ)%']];
+        yield 'hyphenated channel codes are not normalized' => [['cz-web' => 'cz-key']];
+        yield 'numeric channel codes' => [[123 => 'numeric-key']];
+        yield 'empty site key' => [['CZ_WEB' => '']];
+    }
+
+    /**
+     * @param array<array-key, mixed> $channelSiteKeys
+     */
+    #[DataProvider('provideInvalidChannelSiteKeys')]
+    public function testInvalidChannelSiteKeysAreRejected(array $channelSiteKeys): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->processConfiguration([
+            'api_secret' => 'secret',
+            'widget' => ['channel_site_keys' => $channelSiteKeys],
+        ]);
+    }
+
+    /**
+     * @return iterable<string, array{array<array-key, mixed>}>
+     */
+    public static function provideInvalidChannelSiteKeys(): iterable
+    {
+        yield 'integer site key' => [['CZ_WEB' => 123]];
+        yield 'boolean site key' => [['CZ_WEB' => true]];
+        yield 'null site key' => [['CZ_WEB' => null]];
+        yield 'nested site key' => [['CZ_WEB' => ['cz-key']]];
+        yield 'empty channel code' => [['' => 'cz-key']];
+    }
+
+    public function testTheChannelSiteKeysBecomeAContainerParameter(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.build_dir', sys_get_temp_dir());
+        $extension = (new FluffyDiscordSyliusChatbotBundle())->getContainerExtension();
+
+        $extension->load([[
+            'api_secret' => 'secret',
+            'widget' => ['site_key' => 'site-key', 'channel_site_keys' => ['CZ_WEB' => 'cz-key']],
+        ]], $container);
+
+        self::assertSame(['CZ_WEB' => 'cz-key'], $container->getParameter('fluffydiscord_sylius_chatbot.widget.channel_site_keys'));
+        self::assertSame('site-key', $container->getParameter('fluffydiscord_sylius_chatbot.widget.site_key'));
+    }
+
+    /**
+     * @param array<string, mixed> $rawConfig
+     *
+     * @return array<string, mixed>
+     */
+    private function processConfiguration(array $rawConfig): array
+    {
+        $container = new ContainerBuilder();
+        $extension = (new FluffyDiscordSyliusChatbotBundle())->getContainerExtension();
+        $configuration = $extension->getConfiguration([], $container);
+
+        return (new Processor())->processConfiguration($configuration, [$rawConfig]);
     }
 
     /**
