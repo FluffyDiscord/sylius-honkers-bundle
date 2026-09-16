@@ -207,6 +207,44 @@ readonly class MyTool implements ChatbotToolInterface
 
 The interface is autoconfigured; the input schema is generated from the DTO (`Assert\NotBlank` → required, `Assert\Email` → e-mail format, `Assert\Choice` → enum, `Assert\Length` → maxLength, nullable → optional). Descriptions and labels are translation keys resolved with the request locale. `getDefinition()` must not rely on constructor arguments — it is invoked at container compile time to index tools by name (duplicate names fail the container build).
 
+### Choices loaded at runtime
+
+When the allowed values live in the database, put `#[ToolChoice]` on the argument and point it at a service implementing `ToolChoiceLoaderInterface` (autoconfigured). The loaded values become the property's schema `enum` in the tool list, and the same constraint rejects any other value when the tool is called.
+
+```php
+use FluffyDiscord\SyliusChatbotBundle\Contract\ToolChoiceLoaderInterface;
+use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoice;
+
+readonly class RegionChoiceLoader implements ToolChoiceLoaderInterface
+{
+    public function __construct(
+        private RegionRepository $regionRepository,
+    ) {
+    }
+
+    public function loadChoices(): array
+    {
+        return $this->regionRepository->findAllNames();
+    }
+}
+
+readonly class FindByRegionArguments
+{
+    public function __construct(
+        #[ToolChoice(loader: RegionChoiceLoader::class, message: 'The region argument must be one of the listed names.')]
+        public ?string $region = null,
+    ) {
+    }
+}
+```
+
+- Scalar `string` arguments only.
+- The loader is looked up by its service id, which must be its class name (the default for autoconfigured services).
+- Choices are the exact values the tool accepts, in every locale — not translated labels. Duplicates are dropped.
+- A loader that returns nothing leaves the argument out of the schema; any value sent anyway fails validation.
+- A loader that throws fails the tool list and the call. Return an empty list for missing data; throw only for misconfiguration.
+- The violation carries `{{ value }}` and `{{ choices }}` parameters. `null` passes; add `Assert\NotBlank` to make the argument required.
+
 ## Sources
 
 Sources are **not** called per chat. The backend pulls them in bulk, chunks and embeds the documents, and stores the

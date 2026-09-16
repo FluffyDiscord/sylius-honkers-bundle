@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Schema;
 
+use FluffyDiscord\SyliusChatbotBundle\Contract\ToolChoiceLoaderInterface;
+use FluffyDiscord\SyliusChatbotBundle\Registry\ToolChoiceLoaderRegistry;
 use FluffyDiscord\SyliusChatbotBundle\Schema\ArgumentsSchemaGenerator;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\NullableArguments;
+use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionArguments;
+use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionChoiceLoader;
 use FluffyDiscord\SyliusChatbotBundle\Tool\DTO\OrderStatusArguments;
 use FluffyDiscord\SyliusChatbotBundle\Tool\DTO\ProductAvailabilityArguments;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\DependencyInjection\ServiceLocator;
 
 class ArgumentsSchemaGeneratorTest extends TestCase
 {
@@ -16,7 +21,33 @@ class ArgumentsSchemaGeneratorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->generator = new ArgumentsSchemaGenerator();
+        $this->generator = new ArgumentsSchemaGenerator(new ToolChoiceLoaderRegistry(new ServiceLocator([
+            RegionChoiceLoader::class => static fn (): RegionChoiceLoader => new RegionChoiceLoader(),
+        ])));
+    }
+
+    public function testToolChoicePropertyListsTheLoadedChoicesAsItsEnum(): void
+    {
+        $schema = $this->generator->generate(RegionArguments::class);
+
+        self::assertSame(
+            ['type' => 'string', 'enum' => ['Praha', 'Moravskoslezský kraj']],
+            $schema['properties']['region'],
+        );
+        self::assertArrayNotHasKey('required', $schema);
+    }
+
+    public function testToolChoicePropertyIsLeftOutWhenTheLoaderOffersNothing(): void
+    {
+        $emptyLoader = $this->createStub(ToolChoiceLoaderInterface::class);
+        $emptyLoader->method('loadChoices')->willReturn([]);
+        $generator = new ArgumentsSchemaGenerator(new ToolChoiceLoaderRegistry(new ServiceLocator([
+            RegionChoiceLoader::class => static fn (): ToolChoiceLoaderInterface => $emptyLoader,
+        ])));
+
+        $schema = $generator->generate(RegionArguments::class);
+
+        self::assertSame(['type' => 'object', 'additionalProperties' => false], $schema);
     }
 
     public function testOrderStatusArgumentsSchema(): void

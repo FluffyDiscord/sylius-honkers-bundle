@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusChatbotBundle\Schema;
 
+use FluffyDiscord\SyliusChatbotBundle\Registry\ToolChoiceLoaderRegistry;
+use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoice;
 use Symfony\Component\Validator\Constraints\All;
 use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\Email;
@@ -13,6 +15,11 @@ use Symfony\Component\Validator\Constraints\Type;
 
 readonly class ArgumentsSchemaGenerator
 {
+    public function __construct(
+        private ToolChoiceLoaderRegistry $choiceLoaderRegistry,
+    ) {
+    }
+
     public function generate(string $argumentsClass): array
     {
         $reflection = new \ReflectionClass($argumentsClass);
@@ -71,6 +78,17 @@ readonly class ArgumentsSchemaGenerator
         $choiceAttributes = $property->getAttributes(Choice::class);
         if ($choiceAttributes !== []) {
             $schema['enum'] = $choiceAttributes[0]->newInstance()->choices;
+        }
+
+        $toolChoiceAttributes = $property->getAttributes(ToolChoice::class);
+        if ($toolChoiceAttributes !== []) {
+            $loaderClass = $toolChoiceAttributes[0]->newInstance()->loader;
+            $loadedChoices = $this->choiceLoaderRegistry->getChoices($loaderClass);
+            if ($loadedChoices === []) {
+                return null;
+            }
+
+            $schema['enum'] = $loadedChoices;
         }
 
         $lengthAttributes = $property->getAttributes(Length::class);

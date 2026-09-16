@@ -12,9 +12,15 @@ use FluffyDiscord\SyliusChatbotBundle\FluffyDiscordSyliusChatbotBundle;
 use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
 use FluffyDiscord\SyliusChatbotBundle\Locale\ShopLocaleResolver;
 use FluffyDiscord\SyliusChatbotBundle\Registry\DataSourceRegistry;
+use FluffyDiscord\SyliusChatbotBundle\Registry\ToolChoiceLoaderRegistry;
+use FluffyDiscord\SyliusChatbotBundle\Schema\ArgumentsSchemaGenerator;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\NamedExtension;
+use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionArguments;
+use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionChoiceLoader;
 use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetExtension;
 use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetRuntime;
+use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoice;
+use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoiceValidator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -27,6 +33,7 @@ use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
+use Symfony\Component\Validator\ConstraintValidatorInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Twig\Extension\ExtensionInterface;
 use Twig\Extension\RuntimeExtensionInterface;
@@ -168,7 +175,7 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
                 'channel_site_keys' => ['CZ_WEB' => 'cz-key', 'SK_WEB' => '%env(CHATBOT_TEST_SITE_KEY_SK)%'],
             ],
         ]], $container);
-        $this->keepOnlyWiredBundleServices($container);
+        $this->keepOnlyWiredBundleServices($container, $this->getWiredServiceIds());
         $_ENV['CHATBOT_TEST_SITE_KEY_SK'] = 'sk-key';
 
         try {
@@ -191,6 +198,34 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         self::assertTrue($container->getDefinition(ChatbotWidgetRuntime::class)->hasTag('twig.runtime'));
     }
 
+    public function testAShopChoiceLoaderFeedsTheToolSchemaAndTheValidatorIsRegisteredInACompiledContainer(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.build_dir', sys_get_temp_dir());
+        $container->registerForAutoconfiguration(ConstraintValidatorInterface::class)
+            ->addTag('validator.constraint_validator');
+
+        $bundle = new FluffyDiscordSyliusChatbotBundle();
+        $bundle->build($container);
+        $bundle->getContainerExtension()->load([['api_secret' => 'secret']], $container);
+        $this->keepOnlyWiredBundleServices($container, [
+            ArgumentsSchemaGenerator::class,
+            ToolChoiceLoaderRegistry::class,
+            ToolChoiceValidator::class,
+        ]);
+        $container->register(RegionChoiceLoader::class)->setAutoconfigured(true);
+        $container->compile();
+
+        $schemaGenerator = $container->get(ArgumentsSchemaGenerator::class);
+        $schema = $schemaGenerator->generate(RegionArguments::class);
+
+        self::assertFalse($container->hasDefinition(ToolChoice::class));
+        self::assertSame(['Praha', 'Moravskoslezský kraj'], $schema['properties']['region']['enum']);
+        self::assertTrue($container->getDefinition(ToolChoiceValidator::class)->hasTag('validator.constraint_validator'));
+        self::assertInstanceOf(ToolChoiceValidator::class, $container->get(ToolChoiceValidator::class));
+    }
+
     /**
      * @return list<class-string>
      */
@@ -209,10 +244,11 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         ];
     }
 
-    private function keepOnlyWiredBundleServices(ContainerBuilder $container): void
+    /**
+     * @param list<class-string> $wiredServiceIds
+     */
+    private function keepOnlyWiredBundleServices(ContainerBuilder $container, array $wiredServiceIds): void
     {
-        $wiredServiceIds = $this->getWiredServiceIds();
-
         foreach (array_keys($container->getDefinitions()) as $serviceId) {
             $isBundleService = str_starts_with($serviceId, 'FluffyDiscord\\SyliusChatbotBundle\\');
             if (!$isBundleService) {
