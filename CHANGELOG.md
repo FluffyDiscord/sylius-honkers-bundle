@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.3.1 - 2026-09-16
+
+### Changed
+
+- `ToolChoice` now extends `Assert\Choice` and `ToolChoiceValidator` extends `ChoiceValidator`: the loaded values are
+  checked by Symfony's own validator. New options `multiple`, `min`, `max`, `match` and the matching messages.
+  Violations use `Choice`'s codes; the `ToolChoice::NO_SUCH_CHOICE_ERROR` code from v1.3.0 is replaced by the
+  inherited `Choice::NO_SUCH_CHOICE_ERROR`.
+- `multiple: true` on an `array` property is published as `items.enum` with `minItems`/`maxItems`.
+- A `ToolChoice` property typed anything but `string` (or `array` with `multiple`) fails the tool list with a
+  `LogicException` instead of producing a schema no value can satisfy.
+- A loader that returns no choices leaves the argument out of the schema instead of publishing an empty `enum`.
+- Loaded choices are de-duplicated.
+
 ## v1.3.0 - 2026-09-16
 
 ### BC breaks
