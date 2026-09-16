@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.0 - 2026-09-16
+
+### BC breaks
+
+- `ArgumentsSchemaGenerator::__construct()` now requires `ToolChoiceLoaderRegistry $choiceLoaderRegistry`. Autowired
+  installations need no change; only code constructing the generator by hand is affected.
+
+### Added
+
+- `#[ToolChoice(loader: ...)]` constraint and `ToolChoiceLoaderInterface` — tool arguments whose allowed values are
+  loaded at runtime (e.g. from the database). The loader's values are published as the argument's schema `enum` and
+  enforced when the tool is called.
+
 ## v1.2.0 - 2026-09-15
 
 ### BC breaks
