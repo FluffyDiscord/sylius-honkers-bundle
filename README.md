@@ -209,7 +209,7 @@ The interface is autoconfigured; the input schema is generated from the DTO (`As
 
 ### Choices loaded at runtime
 
-When the allowed values live in the database, put `#[ToolChoice]` on the argument and point it at a service implementing `ToolChoiceLoaderInterface` (autoconfigured). The loaded values become the property's schema `enum` in the tool list, and the same constraint rejects any other value when the tool is called.
+`Assert\Choice` takes a fixed list or a static callback — no services. When the allowed values live in the database, use `#[ToolChoice]` instead: it is `Assert\Choice` with the choices loaded from a service implementing `ToolChoiceLoaderInterface` (autoconfigured). The loaded values become the property's schema `enum` in the tool list, and Symfony's `ChoiceValidator` checks them when the tool is called.
 
 ```php
 use FluffyDiscord\SyliusChatbotBundle\Contract\ToolChoiceLoaderInterface;
@@ -238,12 +238,13 @@ readonly class FindByRegionArguments
 }
 ```
 
-- Scalar `string` arguments only.
+- Takes every `Assert\Choice` option except `choices`, `callback` and `strict`: `multiple`, `min`, `max`, `match` and the messages. Violations carry `Choice`'s codes and parameters.
+- The property must be `string`, or `array` with `multiple: true` (published as `items.enum`, plus `minItems`/`maxItems`). Anything else fails the tool list.
 - The loader is looked up by its service id, which must be its class name (the default for autoconfigured services).
 - Choices are the exact values the tool accepts, in every locale — not translated labels. Duplicates are dropped.
-- A loader that returns nothing leaves the argument out of the schema; any value sent anyway fails validation.
+- A loader that returns nothing leaves the argument out of the schema; any value sent anyway fails validation. A required argument (`Assert\NotBlank`) with an empty loader makes the tool uncallable.
 - A loader that throws fails the tool list and the call. Return an empty list for missing data; throw only for misconfiguration.
-- The violation carries `{{ value }}` and `{{ choices }}` parameters. `null` passes; add `Assert\NotBlank` to make the argument required.
+- `null` passes; add `Assert\NotBlank` to make the argument required.
 
 ## Sources
 

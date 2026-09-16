@@ -11,6 +11,7 @@ use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoice;
 use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoiceValidator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\ConstraintValidatorInterface;
 use Symfony\Component\Validator\Exception\UnexpectedTypeException;
@@ -54,7 +55,7 @@ class ToolChoiceValidatorTest extends ConstraintValidatorTestCase
         $this->buildViolation('The region is not one of the offered names.')
             ->setParameter('{{ value }}', $formattedValue)
             ->setParameter('{{ choices }}', '"Praha", "Moravskoslezský kraj"')
-            ->setCode(ToolChoice::NO_SUCH_CHOICE_ERROR)
+            ->setCode(Choice::NO_SUCH_CHOICE_ERROR)
             ->assertRaised();
     }
 
@@ -67,6 +68,62 @@ class ToolChoiceValidatorTest extends ConstraintValidatorTestCase
         yield 'different spelling' => ['moravskoslezský kraj', '"moravskoslezský kraj"'];
         yield 'empty string' => ['', '""'];
         yield 'integer' => [1, '1'];
+    }
+
+    public function testUsesTheNativeChoiceMessageByDefault(): void
+    {
+        $this->validator->validate('Ostrava', $this->createConstraint());
+
+        $this->buildViolation('The value you selected is not a valid choice.')
+            ->setParameter('{{ value }}', '"Ostrava"')
+            ->setParameter('{{ choices }}', '"Praha", "Moravskoslezský kraj"')
+            ->setCode(Choice::NO_SUCH_CHOICE_ERROR)
+            ->assertRaised();
+    }
+
+    public function testAcceptsSeveralOfferedValuesWhenMultiple(): void
+    {
+        $constraint = new ToolChoice(loader: RegionChoiceLoader::class, multiple: true);
+
+        $this->validator->validate(['Praha', 'Moravskoslezský kraj'], $constraint);
+
+        $this->assertNoViolation();
+    }
+
+    public function testRejectsEachValueTheLoaderDoesNotOfferWhenMultiple(): void
+    {
+        $constraint = new ToolChoice(loader: RegionChoiceLoader::class, multiple: true);
+
+        $this->validator->validate(['Praha', 'Ostrava'], $constraint);
+
+        $this->buildViolation($constraint->multipleMessage)
+            ->setParameter('{{ value }}', '"Ostrava"')
+            ->setParameter('{{ choices }}', '"Praha", "Moravskoslezský kraj"')
+            ->setCode(Choice::NO_SUCH_CHOICE_ERROR)
+            ->setInvalidValue('Ostrava')
+            ->assertRaised();
+    }
+
+    public function testEnforcesTheMaximumCountWhenMultiple(): void
+    {
+        $constraint = new ToolChoice(loader: RegionChoiceLoader::class, multiple: true, max: 1);
+
+        $this->validator->validate(['Praha', 'Moravskoslezský kraj'], $constraint);
+
+        $this->buildViolation($constraint->maxMessage)
+            ->setParameter('{{ limit }}', '1')
+            ->setPlural(1)
+            ->setCode(Choice::TOO_MANY_ERROR)
+            ->assertRaised();
+    }
+
+    public function testLeavesTheAttributeConstraintWithoutLoadedChoices(): void
+    {
+        $constraint = $this->createConstraint();
+
+        $this->validator->validate('Praha', $constraint);
+
+        self::assertNull($constraint->choices);
     }
 
     public function testRefusesAnotherConstraint(): void

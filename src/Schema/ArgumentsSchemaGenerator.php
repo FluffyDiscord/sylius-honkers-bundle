@@ -82,13 +82,12 @@ readonly class ArgumentsSchemaGenerator
 
         $toolChoiceAttributes = $property->getAttributes(ToolChoice::class);
         if ($toolChoiceAttributes !== []) {
-            $loaderClass = $toolChoiceAttributes[0]->newInstance()->loader;
-            $loadedChoices = $this->choiceLoaderRegistry->getChoices($loaderClass);
-            if ($loadedChoices === []) {
-                return null;
-            }
+            $toolChoice = $toolChoiceAttributes[0]->newInstance();
+            $schema = $this->applyToolChoices($schema, $toolChoice, $property);
+        }
 
-            $schema['enum'] = $loadedChoices;
+        if ($schema === null) {
+            return null;
         }
 
         $lengthAttributes = $property->getAttributes(Length::class);
@@ -97,6 +96,45 @@ readonly class ArgumentsSchemaGenerator
             if ($maxLength !== null) {
                 $schema['maxLength'] = $maxLength;
             }
+        }
+
+        return $schema;
+    }
+
+    private function applyToolChoices(array $schema, ToolChoice $toolChoice, \ReflectionProperty $property): ?array
+    {
+        $expectedType = $toolChoice->multiple ? 'array' : 'string';
+        $isExpectedType = $schema['type'] === $expectedType;
+        if (!$isExpectedType) {
+            throw new \LogicException(sprintf(
+                'The #[ToolChoice] property %s::$%s must be typed %s.',
+                $property->getDeclaringClass()->getName(),
+                $property->getName(),
+                $expectedType,
+            ));
+        }
+
+        $loadedChoices = $this->choiceLoaderRegistry->getChoices($toolChoice->loader);
+        if ($loadedChoices === []) {
+            return null;
+        }
+
+        if (!$toolChoice->multiple) {
+            $schema['enum'] = $loadedChoices;
+
+            return $schema;
+        }
+
+        $schema['items'] = ['type' => 'string', 'enum' => $loadedChoices];
+
+        $minimumItems = $toolChoice->min;
+        if ($minimumItems !== null) {
+            $schema['minItems'] = $minimumItems;
+        }
+
+        $maximumItems = $toolChoice->max;
+        if ($maximumItems !== null) {
+            $schema['maxItems'] = $maximumItems;
         }
 
         return $schema;

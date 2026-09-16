@@ -6,10 +6,10 @@ namespace FluffyDiscord\SyliusChatbotBundle\Validator;
 
 use FluffyDiscord\SyliusChatbotBundle\Registry\ToolChoiceLoaderRegistry;
 use Symfony\Component\Validator\Constraint;
-use Symfony\Component\Validator\ConstraintValidator;
+use Symfony\Component\Validator\Constraints\ChoiceValidator;
 use Symfony\Component\Validator\Exception\UnexpectedTypeException;
 
-class ToolChoiceValidator extends ConstraintValidator
+class ToolChoiceValidator extends ChoiceValidator
 {
     public function __construct(
         private readonly ToolChoiceLoaderRegistry $choiceLoaderRegistry,
@@ -27,15 +27,7 @@ class ToolChoiceValidator extends ConstraintValidator
         }
 
         $choices = $this->choiceLoaderRegistry->getChoices($constraint->loader);
-        $isChoice = in_array($value, $choices, true);
-        if ($isChoice) {
-            return;
-        }
 
-        $this->context->buildViolation($constraint->message)
-            ->setParameter('{{ value }}', $this->formatValue($value))
-            ->setParameter('{{ choices }}', $this->formatValues($choices))
-            ->setCode(ToolChoice::NO_SUCH_CHOICE_ERROR)
-            ->addViolation();
+        parent::validate($value, $constraint->withChoices($choices));
     }
 }

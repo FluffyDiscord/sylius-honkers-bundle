@@ -7,9 +7,11 @@ namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Schema;
 use FluffyDiscord\SyliusChatbotBundle\Contract\ToolChoiceLoaderInterface;
 use FluffyDiscord\SyliusChatbotBundle\Registry\ToolChoiceLoaderRegistry;
 use FluffyDiscord\SyliusChatbotBundle\Schema\ArgumentsSchemaGenerator;
+use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\MistypedRegionArguments;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\NullableArguments;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionArguments;
 use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionChoiceLoader;
+use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionListArguments;
 use FluffyDiscord\SyliusChatbotBundle\Tool\DTO\OrderStatusArguments;
 use FluffyDiscord\SyliusChatbotBundle\Tool\DTO\ProductAvailabilityArguments;
 use PHPUnit\Framework\TestCase;
@@ -35,6 +37,29 @@ class ArgumentsSchemaGeneratorTest extends TestCase
             $schema['properties']['region'],
         );
         self::assertArrayNotHasKey('required', $schema);
+    }
+
+    public function testMultipleToolChoicePropertyListsTheLoadedChoicesAsItsItemEnum(): void
+    {
+        $schema = $this->generator->generate(RegionListArguments::class);
+
+        self::assertSame(
+            [
+                'type' => 'array',
+                'items' => ['type' => 'string', 'enum' => ['Praha', 'Moravskoslezský kraj']],
+                'minItems' => 1,
+                'maxItems' => 2,
+            ],
+            $schema['properties']['regions'],
+        );
+    }
+
+    public function testToolChoiceOnAPropertyOfTheWrongTypeIsRefused(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(MistypedRegionArguments::class . '::$region must be typed string');
+
+        $this->generator->generate(MistypedRegionArguments::class);
     }
 
     public function testToolChoicePropertyIsLeftOutWhenTheLoaderOffersNothing(): void

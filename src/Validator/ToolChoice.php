@@ -6,19 +6,12 @@ namespace FluffyDiscord\SyliusChatbotBundle\Validator;
 
 use FluffyDiscord\SyliusChatbotBundle\Contract\ToolChoiceLoaderInterface;
 use Symfony\Component\Validator\Attribute\HasNamedArguments;
-use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Constraints\Choice;
 
 #[\Attribute(\Attribute::TARGET_PROPERTY)]
-class ToolChoice extends Constraint
+class ToolChoice extends Choice
 {
-    public const NO_SUCH_CHOICE_ERROR = '5c1e5c0e-3a1f-4f5e-9d0b-6a3c8f1b2e47';
-
-    protected const ERROR_NAMES = [
-        self::NO_SUCH_CHOICE_ERROR => 'NO_SUCH_CHOICE_ERROR',
-    ];
-
     public string $loader;
-    public string $message = 'The value you selected is not a valid choice.';
 
     /**
      * @param class-string<ToolChoiceLoaderInterface> $loader
@@ -27,13 +20,41 @@ class ToolChoice extends Constraint
     #[HasNamedArguments]
     public function __construct(
         string  $loader,
+        ?bool   $multiple = null,
+        ?int    $min = null,
+        ?int    $max = null,
         ?string $message = null,
+        ?string $multipleMessage = null,
+        ?string $minMessage = null,
+        ?string $maxMessage = null,
+        ?bool   $match = null,
         ?array  $groups = null,
         mixed   $payload = null,
     ) {
-        parent::__construct(null, $groups, $payload);
+        parent::__construct(
+            multiple: $multiple,
+            min: $min,
+            max: $max,
+            message: $message,
+            multipleMessage: $multipleMessage,
+            minMessage: $minMessage,
+            maxMessage: $maxMessage,
+            groups: $groups,
+            payload: $payload,
+            match: $match,
+        );
 
         $this->loader = $loader;
-        $this->message = $message ?? $this->message;
+    }
+
+    /**
+     * @param list<string> $choices
+     */
+    public function withChoices(array $choices): self
+    {
+        $loadedConstraint = clone $this;
+        $loadedConstraint->choices = $choices;
+
+        return $loadedConstraint;
     }
 }
