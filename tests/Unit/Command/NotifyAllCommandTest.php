@@ -24,7 +24,6 @@ use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Console\Tester\CommandTester;
-use Symfony\Component\DependencyInjection\ServiceLocator;
 
 class NotifyAllCommandTest extends TestCase
 {
@@ -215,9 +214,7 @@ class NotifyAllCommandTest extends TestCase
 
     private function createRegistry(RecordingDataSource $source): DataSourceRegistry
     {
-        return new DataSourceRegistry(new ServiceLocator([
-            'products' => fn (): RecordingDataSource => $source,
-        ]));
+        return new DataSourceRegistry([$source]);
     }
 
     /**
