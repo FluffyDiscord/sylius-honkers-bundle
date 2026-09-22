@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\DTO;
+namespace FluffyDiscord\SyliusHonkersBundle\DTO;
 
-readonly class NotificationOutcome
+class NotificationOutcome
 {
     public function __construct(
-        public bool $accepted,
-        public ?int $retryAfterSeconds = null,
+        public readonly bool $accepted,
+        public readonly ?int $retryAfterSeconds = null,
     ) {
     }
 

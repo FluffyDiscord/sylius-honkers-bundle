@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Twig;
+namespace FluffyDiscord\SyliusHonkersBundle\Twig;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use Sylius\Component\Channel\Context\ChannelContextInterface;
 use Sylius\Component\Channel\Context\ChannelNotFoundException;
 use Twig\Extension\RuntimeExtensionInterface;
 
-readonly class ChatbotWidgetRuntime implements RuntimeExtensionInterface
+class ChatbotWidgetRuntime implements RuntimeExtensionInterface
 {
     public function __construct(
-        private ChannelContextInterface $channelContext,
-        private SiteKeyResolver         $siteKeyResolver,
+        private readonly ChannelContextInterface $channelContext,
+        private readonly SiteKeyResolver         $siteKeyResolver,
     ) {
     }
 

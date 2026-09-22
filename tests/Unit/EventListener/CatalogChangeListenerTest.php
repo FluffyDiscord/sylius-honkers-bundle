@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\EventListener;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\EventListener;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusChatbotBundle\EventListener\CatalogChangeListener;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\SyliusHonkersBundle\EventListener\CatalogChangeListener;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;

@@ -2,31 +2,31 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tool;
+namespace FluffyDiscord\SyliusHonkersBundle\Tool;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotToolInterface;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ContentItem;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ProductsBlock;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ToolCallContext;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ToolDefinition;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ToolResult;
-use FluffyDiscord\SyliusChatbotBundle\Product\ProductViewFactory;
-use FluffyDiscord\SyliusChatbotBundle\Tool\DTO\ProductAvailabilityArguments;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\Honkers\Contract\ChatbotToolInterface;
+use FluffyDiscord\Honkers\DTO\ContentItem;
+use FluffyDiscord\SyliusHonkersBundle\DTO\ProductsBlock;
+use FluffyDiscord\Honkers\DTO\ToolCallContext;
+use FluffyDiscord\Honkers\DTO\ToolDefinition;
+use FluffyDiscord\Honkers\DTO\ToolResult;
+use FluffyDiscord\SyliusHonkersBundle\Product\ProductViewFactory;
+use FluffyDiscord\SyliusHonkersBundle\Tool\DTO\ProductAvailabilityArguments;
 use Sylius\Component\Core\Model\ProductVariantInterface;
 use Sylius\Component\Core\Repository\ProductVariantRepositoryInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
-readonly class GetProductAvailabilityTool implements ChatbotToolInterface
+class GetProductAvailabilityTool implements ChatbotToolInterface
 {
     public function __construct(
-        private ChannelResolver     $channelResolver,
-        private ProductViewFactory  $productViewFactory,
-        private TranslatorInterface $translator,
+        private readonly ChannelResolver     $channelResolver,
+        private readonly ProductViewFactory  $productViewFactory,
+        private readonly TranslatorInterface $translator,
 
         #[Autowire(service: 'sylius.repository.product_variant')]
-        private ProductVariantRepositoryInterface $variantRepository,
+        private readonly ProductVariantRepositoryInterface $variantRepository,
     ) {
     }
 
@@ -34,7 +34,7 @@ readonly class GetProductAvailabilityTool implements ChatbotToolInterface
     {
         return new ToolDefinition(
             'get_product_availability',
-            'fluffydiscord_sylius_chatbot.tool.get_product_availability.description',
+            'fluffydiscord_honkers.tool.get_product_availability.description',
         );
     }
 
@@ -57,7 +57,7 @@ readonly class GetProductAvailabilityTool implements ChatbotToolInterface
             }
             if ($item === null) {
                 $contentLines[] = $this->translator->trans(
-                    'fluffydiscord_sylius_chatbot.tool.get_product_availability.unknown',
+                    'fluffydiscord_honkers.tool.get_product_availability.unknown',
                     ['%code%' => $code],
                     'messages',
                     $context->locale,
@@ -68,8 +68,8 @@ readonly class GetProductAvailabilityTool implements ChatbotToolInterface
 
             $items[] = $item;
             $lineKey = $item->inStock
-                ? 'fluffydiscord_sylius_chatbot.tool.get_product_availability.line_in_stock'
-                : 'fluffydiscord_sylius_chatbot.tool.get_product_availability.line_out_of_stock';
+                ? 'fluffydiscord_honkers.tool.get_product_availability.line_in_stock'
+                : 'fluffydiscord_honkers.tool.get_product_availability.line_out_of_stock';
             $contentLines[] = $this->translator->trans(
                 $lineKey,
                 [

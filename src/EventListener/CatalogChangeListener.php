@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\EventListener;
+namespace FluffyDiscord\SyliusHonkersBundle\EventListener;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Events;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelPricingInterface;
 use Sylius\Component\Locale\Provider\LocaleCollectionProviderInterface;
@@ -24,14 +24,14 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 #[AsDoctrineListener(event: Events::postPersist)]
 #[AsDoctrineListener(event: Events::postUpdate)]
 #[AsDoctrineListener(event: Events::postRemove)]
-readonly class CatalogChangeListener
+class CatalogChangeListener
 {
     public function __construct(
-        private CatalogChangeNotifier $catalogChangeNotifier,
-        private LoggerInterface       $logger,
+        private readonly CatalogChangeNotifier $catalogChangeNotifier,
+        private readonly LoggerInterface       $logger,
 
         #[Autowire(service: 'sylius.provider.locale_collection')]
-        private LocaleCollectionProviderInterface $localeCollectionProvider,
+        private readonly LocaleCollectionProviderInterface $localeCollectionProvider,
     ) {
     }
 

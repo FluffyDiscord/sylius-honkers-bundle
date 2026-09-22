@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\DataSource;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\DataSource;
 
 use PHPUnit\Framework\TestCase;
 

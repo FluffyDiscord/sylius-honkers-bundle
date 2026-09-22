@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Product;
+namespace FluffyDiscord\SyliusHonkersBundle\Product;
 
 use Sylius\Component\Core\Calculator\ProductVariantPricesCalculatorInterface;
 use Sylius\Component\Core\Exception\MissingChannelConfigurationException;
@@ -10,11 +10,11 @@ use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Core\Model\ProductVariantInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-readonly class VariantPriceResolver
+class VariantPriceResolver
 {
     public function __construct(
         #[Autowire(service: 'sylius.calculator.product_variant_price')]
-        private ProductVariantPricesCalculatorInterface $pricesCalculator,
+        private readonly ProductVariantPricesCalculatorInterface $pricesCalculator,
     ) {
     }
 

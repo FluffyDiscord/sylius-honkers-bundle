@@ -2,29 +2,29 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tool;
+namespace FluffyDiscord\SyliusHonkersBundle\Tool;
 
-use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotToolInterface;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ContentItem;
-use FluffyDiscord\SyliusChatbotBundle\DTO\FormDefinition;
-use FluffyDiscord\SyliusChatbotBundle\DTO\FormField;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ToolCallContext;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ToolDefinition;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ToolResult;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ToolUiHints;
-use FluffyDiscord\SyliusChatbotBundle\Enum\FormFieldType;
-use FluffyDiscord\SyliusChatbotBundle\Tool\DTO\OrderStatusArguments;
+use FluffyDiscord\Honkers\Contract\ChatbotToolInterface;
+use FluffyDiscord\Honkers\DTO\ContentItem;
+use FluffyDiscord\Honkers\DTO\FormDefinition;
+use FluffyDiscord\Honkers\DTO\FormField;
+use FluffyDiscord\Honkers\DTO\ToolCallContext;
+use FluffyDiscord\Honkers\DTO\ToolDefinition;
+use FluffyDiscord\Honkers\DTO\ToolResult;
+use FluffyDiscord\Honkers\DTO\ToolUiHints;
+use FluffyDiscord\Honkers\Enum\FormFieldType;
+use FluffyDiscord\SyliusHonkersBundle\Tool\DTO\OrderStatusArguments;
 use Sylius\Component\Core\Model\OrderInterface;
 use Sylius\Component\Core\Model\ShipmentInterface;
 use Sylius\Component\Core\Repository\OrderRepositoryInterface;
 use Sylius\Component\Order\Model\OrderInterface as BaseOrderInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
-readonly class GetOrderStatusTool implements ChatbotToolInterface
+class GetOrderStatusTool implements ChatbotToolInterface
 {
     public function __construct(
-        private OrderRepositoryInterface $orderRepository,
-        private TranslatorInterface $translator,
+        private readonly OrderRepositoryInterface $orderRepository,
+        private readonly TranslatorInterface $translator,
     ) {
     }
 
@@ -32,25 +32,25 @@ readonly class GetOrderStatusTool implements ChatbotToolInterface
     {
         return new ToolDefinition(
             'get_order_status',
-            'fluffydiscord_sylius_chatbot.tool.get_order_status.description',
+            'fluffydiscord_honkers.tool.get_order_status.description',
             new ToolUiHints(new FormDefinition(
                 'get_order_status',
-                'fluffydiscord_sylius_chatbot.tool.get_order_status.form.title',
+                'fluffydiscord_honkers.tool.get_order_status.form.title',
                 [
                     new FormField(
                         'orderNumber',
-                        'fluffydiscord_sylius_chatbot.tool.get_order_status.form.order_number',
+                        'fluffydiscord_honkers.tool.get_order_status.form.order_number',
                         FormFieldType::Text,
                         true,
                     ),
                     new FormField(
                         'email',
-                        'fluffydiscord_sylius_chatbot.tool.get_order_status.form.email',
+                        'fluffydiscord_honkers.tool.get_order_status.form.email',
                         FormFieldType::Email,
                         true,
                     ),
                 ],
-                'fluffydiscord_sylius_chatbot.tool.get_order_status.form.submit',
+                'fluffydiscord_honkers.tool.get_order_status.form.submit',
             )),
         );
     }
@@ -66,7 +66,7 @@ readonly class GetOrderStatusTool implements ChatbotToolInterface
         $isVisible = $order instanceof OrderInterface && $this->isOwnedBy($order, $arguments->email);
         if (!$isVisible) {
             return new ToolResult([new ContentItem($this->translator->trans(
-                'fluffydiscord_sylius_chatbot.tool.get_order_status.not_found',
+                'fluffydiscord_honkers.tool.get_order_status.not_found',
                 ['%number%' => $arguments->orderNumber],
                 'messages',
                 $context->locale,
@@ -74,7 +74,7 @@ readonly class GetOrderStatusTool implements ChatbotToolInterface
         }
 
         return new ToolResult([new ContentItem($this->translator->trans(
-            'fluffydiscord_sylius_chatbot.tool.get_order_status.summary',
+            'fluffydiscord_honkers.tool.get_order_status.summary',
             [
                 '%number%' => (string) $order->getNumber(),
                 '%state%' => (string) $order->getState(),
@@ -136,7 +136,7 @@ readonly class GetOrderStatusTool implements ChatbotToolInterface
         }
 
         return $this->translator->trans(
-            'fluffydiscord_sylius_chatbot.tool.get_order_status.tracking',
+            'fluffydiscord_honkers.tool.get_order_status.tracking',
             ['%codes%' => implode(', ', $trackingCodes)],
             'messages',
             $locale,

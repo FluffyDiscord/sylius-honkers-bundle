@@ -1,31 +1,38 @@
 {
-    "name": "fluffydiscord/sylius-chatbot-bundle",
-    "description": "Chatbot tool server endpoints, data sources and widget embed for Sylius 1.14 and 2.x shops",
+    "name": "fluffydiscord/sylius-honkers-bundle",
+    "description": "Plug-and-play Sylius wrapper for the Honkers chatbot tool-server: default tools, data sources and shop widget",
     "type": "symfony-bundle",
     "license": "proprietary",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/FluffyDiscord/symfony-honkers-bundle.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/FluffyDiscord/honkers-sdk.git"
+        }
+    ],
     "require": {
-        "php": "^8.2",
+        "php": "^8.1",
         "ext-intl": "*",
         "doctrine/collections": "^1.8 || ^2.1",
         "doctrine/doctrine-bundle": "^2.13 || ^3.2 || ^4.0",
         "doctrine/orm": "^2.20 || ^3.6 || ^4.0",
+        "fluffydiscord/honkers-sdk": "dev-master",
+        "fluffydiscord/symfony-honkers-bundle": "dev-master",
         "liip/imagine-bundle": "^2.13",
         "sylius/sylius": "^1.14 || ^2.2 || ^2.3@alpha",
-        "symfony/config": "^6.4 || ^7.4 || ^8.0",
-        "symfony/console": "^6.4 || ^7.4 || ^8.0",
-        "symfony/dependency-injection": "^6.4 || ^7.4 || ^8.0",
-        "symfony/event-dispatcher": "^6.4 || ^7.4 || ^8.0",
-        "symfony/framework-bundle": "^6.4 || ^7.4 || ^8.0",
-        "symfony/http-client": "^6.4 || ^7.4 || ^8.0",
-        "symfony/http-foundation": "^6.4 || ^7.4 || ^8.0",
-        "symfony/http-kernel": "^6.4 || ^7.4 || ^8.0",
-        "symfony/intl": "^6.4 || ^7.4 || ^8.0",
-        "symfony/routing": "^6.4 || ^7.4 || ^8.0",
-        "symfony/security-core": "^6.4 || ^7.4 || ^8.0",
-        "symfony/security-http": "^6.4 || ^7.4 || ^8.0",
-        "symfony/serializer": "^6.4 || ^7.4 || ^8.0",
-        "symfony/translation": "^6.4 || ^7.4 || ^8.0",
-        "symfony/validator": "^6.4 || ^7.4 || ^8.0",
+        "symfony/config": "^6.4 || ^7.0 || ^8.0",
+        "symfony/console": "^6.4 || ^7.0 || ^8.0",
+        "symfony/dependency-injection": "^6.4 || ^7.0 || ^8.0",
+        "symfony/event-dispatcher": "^6.4 || ^7.0 || ^8.0",
+        "symfony/http-client": "^6.4 || ^7.0 || ^8.0",
+        "symfony/http-foundation": "^6.4 || ^7.0 || ^8.0",
+        "symfony/http-kernel": "^6.4 || ^7.0 || ^8.0",
+        "symfony/translation": "^6.4 || ^7.0 || ^8.0",
         "twig/twig": "^2.12 || ^3.3"
     },
     "require-dev": {
@@ -34,12 +41,12 @@
     },
     "autoload": {
         "psr-4": {
-            "FluffyDiscord\\SyliusChatbotBundle\\": "src/"
+            "FluffyDiscord\\SyliusHonkersBundle\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "FluffyDiscord\\SyliusChatbotBundle\\Tests\\": "tests/"
+            "FluffyDiscord\\SyliusHonkersBundle\\Tests\\": "tests/"
         }
     },
     "config": {

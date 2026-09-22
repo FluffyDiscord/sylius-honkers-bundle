@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Product;
+namespace FluffyDiscord\SyliusHonkersBundle\Product;
 
-use FluffyDiscord\SyliusChatbotBundle\Contract\ProductIndexabilityInterface;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Core\Model\ProductInterface;
 use Sylius\Component\Core\Model\ProductVariantInterface;
 
-readonly class ProductIndexability implements ProductIndexabilityInterface
+class ProductIndexability implements ProductIndexabilityInterface
 {
     public function __construct(
-        private VariantPriceResolver $variantPriceResolver,
+        private readonly VariantPriceResolver $variantPriceResolver,
     ) {
     }
 

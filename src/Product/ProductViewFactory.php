@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Product;
+namespace FluffyDiscord\SyliusHonkersBundle\Product;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ProductViewFactoryInterface;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ProductItem;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ProductViewFactoryInterface;
+use FluffyDiscord\SyliusHonkersBundle\DTO\ProductItem;
 use Liip\ImagineBundle\Imagine\Cache\CacheManager;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
@@ -14,14 +14,14 @@ use Sylius\Component\Core\Model\ProductInterface;
 use Sylius\Component\Core\Model\ProductVariantInterface;
 use Sylius\Component\Inventory\Checker\AvailabilityCheckerInterface;
 
-readonly class ProductViewFactory implements ProductViewFactoryInterface
+class ProductViewFactory implements ProductViewFactoryInterface
 {
     public function __construct(
-        private VariantPriceResolver         $variantPriceResolver,
-        private AvailabilityCheckerInterface $availabilityChecker,
-        private ChannelUrlGenerator          $channelUrlGenerator,
-        private CacheManager                 $imageCacheManager,
-        private LoggerInterface              $logger,
+        private readonly VariantPriceResolver         $variantPriceResolver,
+        private readonly AvailabilityCheckerInterface $availabilityChecker,
+        private readonly ChannelUrlGenerator          $channelUrlGenerator,
+        private readonly CacheManager                 $imageCacheManager,
+        private readonly LoggerInterface              $logger,
     ) {
     }
 

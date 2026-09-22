@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\DataSource;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\DataSource;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
@@ -11,13 +11,13 @@ use MonsieurBiz\SyliusCmsPagePlugin\Entity\Page;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\PageInterface;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\PageTranslationInterface;
 use MonsieurBiz\SyliusCmsPagePlugin\Repository\PageRepository;
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
-use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
-use FluffyDiscord\SyliusChatbotBundle\DataSource\CmsPagesDataSource;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\ThrowingHtmlToText;
-use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
+use FluffyDiscord\Honkers\Cursor\CursorCodec;
+use FluffyDiscord\SyliusHonkersBundle\DataSource\CmsPagesDataSource;
+use FluffyDiscord\Honkers\DTO\SourceQuery;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ThrowingHtmlToText;
+use FluffyDiscord\Honkers\Text\HtmlToText;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Contract;
+namespace FluffyDiscord\SyliusHonkersBundle\Contract;
 
 use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Core\Model\ProductVariantInterface;

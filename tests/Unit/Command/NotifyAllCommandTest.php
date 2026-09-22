@@ -2,21 +2,23 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Command;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Command;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\Command\NotifyAllCommand;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDocument;
-use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
-use FluffyDiscord\SyliusChatbotBundle\Locale\ShopLocaleResolver;
-use FluffyDiscord\SyliusChatbotBundle\Registry\DataSourceRegistry;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RecordingDataSource;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\Command\NotifyAllCommand;
+use FluffyDiscord\Honkers\DTO\SourceDocument;
+use FluffyDiscord\Honkers\Enum\DocumentKind;
+use FluffyDiscord\Honkers\Locale\LocaleMatcher;
+use FluffyDiscord\SyliusHonkersBundle\Locale\SyliusLocaleContext;
+use FluffyDiscord\Honkers\Registry\DataSourceRegistry;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingDataSource;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
+use Sylius\Component\Locale\Context\LocaleContextInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -131,7 +133,8 @@ class NotifyAllCommandTest extends TestCase
             $this->createRegistry($source),
             $notifier,
             $channelResolver,
-            new ShopLocaleResolver($channelResolver),
+            $this->createLocaleContext($channelResolver),
+            new LocaleMatcher(),
             $siteKeyResolver,
         );
         $output = new BufferedOutput();
@@ -195,8 +198,18 @@ class NotifyAllCommandTest extends TestCase
             $this->createRegistry($source),
             new RecordingCatalogChangeNotifier($siteKeyResolver),
             $channelResolver,
-            new ShopLocaleResolver($channelResolver),
+            $this->createLocaleContext($channelResolver),
+            new LocaleMatcher(),
             $siteKeyResolver,
+        );
+    }
+
+    private function createLocaleContext(ChannelResolver $channelResolver): SyliusLocaleContext
+    {
+        return new SyliusLocaleContext(
+            $channelResolver,
+            $this->createStub(LocaleContextInterface::class),
+            new LocaleMatcher(),
         );
     }
 

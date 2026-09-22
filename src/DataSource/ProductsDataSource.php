@@ -2,23 +2,23 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\DataSource;
+namespace FluffyDiscord\SyliusHonkersBundle\DataSource;
 
 use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Query\Expr\Join;
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotDataSourceInterface;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ProductIndexabilityInterface;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ProductViewFactoryInterface;
-use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
-use FluffyDiscord\SyliusChatbotBundle\DTO\DocumentPage;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDefinition;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDocument;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
-use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ProductViewFactoryInterface;
+use FluffyDiscord\Honkers\Cursor\CursorCodec;
+use FluffyDiscord\Honkers\DTO\DocumentPage;
+use FluffyDiscord\Honkers\DTO\SourceDefinition;
+use FluffyDiscord\Honkers\DTO\SourceDocument;
+use FluffyDiscord\Honkers\DTO\SourceQuery;
+use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Enum\DocumentKind;
+use FluffyDiscord\Honkers\Text\HtmlToText;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Attribute\Model\AttributeValueInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
@@ -29,19 +29,19 @@ use Sylius\Component\Taxonomy\Model\TaxonInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
-readonly class ProductsDataSource implements ChatbotDataSourceInterface
+class ProductsDataSource implements ChatbotDataSourceInterface
 {
     public function __construct(
-        private ChannelResolver              $channelResolver,
-        private ProductViewFactoryInterface  $productViewFactory,
-        private ProductIndexabilityInterface $productIndexability,
-        private CursorCodec                  $cursorCodec,
-        private HtmlToText                   $htmlToText,
-        private TranslatorInterface          $translator,
-        private LoggerInterface              $logger,
+        private readonly ChannelResolver              $channelResolver,
+        private readonly ProductViewFactoryInterface  $productViewFactory,
+        private readonly ProductIndexabilityInterface $productIndexability,
+        private readonly CursorCodec                  $cursorCodec,
+        private readonly HtmlToText                   $htmlToText,
+        private readonly TranslatorInterface          $translator,
+        private readonly LoggerInterface              $logger,
 
         #[Autowire(service: 'sylius.repository.product_variant')]
-        private ProductVariantRepositoryInterface $variantRepository,
+        private readonly ProductVariantRepositoryInterface $variantRepository,
     ) {
     }
 
@@ -49,7 +49,7 @@ readonly class ProductsDataSource implements ChatbotDataSourceInterface
     {
         return new SourceDefinition(
             CatalogSourceName::Products->value,
-            'fluffydiscord_sylius_chatbot.source.products.description',
+            'fluffydiscord_honkers.source.products.description',
         );
     }
 
@@ -258,8 +258,8 @@ readonly class ProductsDataSource implements ChatbotDataSourceInterface
 
         if (is_bool($value)) {
             $translationKey = $value
-                ? 'fluffydiscord_sylius_chatbot.attribute_value.yes'
-                : 'fluffydiscord_sylius_chatbot.attribute_value.no';
+                ? 'fluffydiscord_honkers.attribute_value.yes'
+                : 'fluffydiscord_honkers.attribute_value.no';
 
             return $this->translator->trans($translationKey, [], 'messages', $locale);
         }

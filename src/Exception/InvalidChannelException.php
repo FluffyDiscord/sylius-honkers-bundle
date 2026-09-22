@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Exception;
+namespace FluffyDiscord\SyliusHonkersBundle\Exception;
 
-use FluffyDiscord\SyliusChatbotBundle\Enum\ApiErrorCode;
+use FluffyDiscord\Honkers\Enum\ApiErrorCode;
+use FluffyDiscord\Honkers\Exception\ChatbotApiException;
 use Symfony\Component\HttpFoundation\Response;
 
 class InvalidChannelException extends ChatbotApiException

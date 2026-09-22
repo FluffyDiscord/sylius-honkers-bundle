@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\DTO\NotificationOutcome;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\DTO\NotificationOutcome;
+use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
 

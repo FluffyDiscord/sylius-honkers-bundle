@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Channel;
+namespace FluffyDiscord\SyliusHonkersBundle\Channel;
 
 use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 
-readonly class ChannelUrlGenerator
+class ChannelUrlGenerator
 {
     public function __construct(
-        private RouterInterface $router,
+        private readonly RouterInterface $router,
     ) {
     }
 

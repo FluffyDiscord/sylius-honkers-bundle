@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Ingest;
+namespace FluffyDiscord\SyliusHonkersBundle\Ingest;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\DTO\NotificationOutcome;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SiteKeyRouting;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\DTO\NotificationOutcome;
+use FluffyDiscord\SyliusHonkersBundle\DTO\SiteKeyRouting;
+use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -32,10 +32,10 @@ class CatalogChangeNotifier implements ResetInterface
         private readonly LoggerInterface     $logger,
         private readonly SiteKeyResolver     $siteKeyResolver,
 
-        #[Autowire(param: 'fluffydiscord_sylius_chatbot.backend_url')]
+        #[Autowire(param: 'fluffydiscord_honkers.backend_url')]
         private readonly string $backendUrl,
 
-        #[Autowire(param: 'fluffydiscord_sylius_chatbot.ingest_secret')]
+        #[Autowire(param: 'fluffydiscord_honkers.ingest_secret')]
         private readonly string $ingestSecret,
 
         #[Autowire(param: 'kernel.environment')]

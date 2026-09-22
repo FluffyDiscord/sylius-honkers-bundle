@@ -1,19 +1,8 @@
-fluffydiscord_sylius_chatbot:
+fluffydiscord_honkers:
     error:
-        unauthorized: 'Missing or invalid API secret.'
-        tool_not_found: 'The requested tool does not exist.'
-        source_not_found: 'The requested data source does not exist.'
-        validation_failed: 'The request is invalid.'
-        invalid_cursor: 'The pagination cursor is invalid.'
-        invalid_locale: 'The requested locale is not served.'
         invalid_channel: 'The requested channel does not exist.'
         ambiguous_taxon_tree: 'The channel has no menu taxon and the shop has several taxon trees, so its categories cannot be told apart.'
-        bad_request: 'The request could not be processed.'
-        not_found: 'The requested resource does not exist.'
-        method_not_allowed: 'The HTTP method is not allowed for this endpoint.'
-        internal_error: 'An unexpected error occurred.'
     tool:
-        failure: 'The requested information could not be retrieved right now. Please try again later.'
         get_order_status:
             description: 'Looks up the current status of a customer order by its number and the customer e-mail address.'
             form:

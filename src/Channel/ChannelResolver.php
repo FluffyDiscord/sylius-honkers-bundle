@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Channel;
+namespace FluffyDiscord\SyliusHonkersBundle\Channel;
 
-use FluffyDiscord\SyliusChatbotBundle\Exception\InvalidChannelException;
+use FluffyDiscord\SyliusHonkersBundle\Exception\InvalidChannelException;
 use Sylius\Component\Channel\Context\ChannelContextInterface;
 use Sylius\Component\Channel\Context\ChannelNotFoundException;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;

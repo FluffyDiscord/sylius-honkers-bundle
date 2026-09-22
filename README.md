@@ -1,19 +1,28 @@
-# FluffyDiscord Sylius Chatbot Bundle
+# FluffyDiscord Sylius Honkers Bundle
 
-Exposes a small authenticated HTTP tool server (`/chatbot/v1`) for an external AI chatbot backend and embeds the chat widget into the Sylius shop layout.
+Plug-and-play Sylius wrapper for the Honkers chatbot tool-server. It adds the Sylius default tools,
+data sources and the shop widget on top of two lower layers:
 
-Requires PHP `^8.2` and Sylius `^1.14 || ^2.2 || ^2.3`.
+- [`fluffydiscord/honkers-sdk`](https://github.com/FluffyDiscord/honkers-sdk) — the
+  framework-agnostic core (tools, data sources, JSON-schema, DTOs).
+- [`fluffydiscord/symfony-honkers-bundle`](https://github.com/FluffyDiscord/symfony-honkers-bundle) —
+  the vanilla Symfony bundle that exposes the `/chatbot/v1` HTTP endpoints, security and wiring.
+
+Both are pulled in automatically as dependencies. This bundle only adds the Sylius-specific pieces.
+
+Requires PHP `^8.1` and Sylius `^1.14 || ^2.2 || ^2.3`.
 
 ## Requirements
 
 | Package | Constraint |
 |---|---|
-| `php` | `^8.2` |
+| `php` | `^8.1` |
 | `ext-intl` | `*` |
+| `fluffydiscord/symfony-honkers-bundle` | `dev-master` |
 | `sylius/sylius` | `^1.14 \|\| ^2.2 \|\| ^2.3@alpha` |
 | `doctrine/orm` | `^2.20 \|\| ^3.6 \|\| ^4.0` |
 | `doctrine/doctrine-bundle` | `^2.13 \|\| ^3.2 \|\| ^4.0` |
-| `symfony/*` | `^6.4 \|\| ^7.4 \|\| ^8.0` |
+| `symfony/*` | `^6.4 \|\| ^7.0 \|\| ^8.0` |
 | `twig/twig` | `^2.12 \|\| ^3.3` |
 
 The `@alpha` on `sylius/sylius` is only because 2.3 has no stable tag yet (`v2.3.0-ALPHA.1`); it drops once 2.3 ships stable.
@@ -25,35 +34,45 @@ On Sylius 1.14 the shop runs on Symfony 6.4 and has no Twig Hooks, so the widget
 ### 1. Composer
 
 ```bash
-composer require fluffydiscord/sylius-chatbot-bundle
+composer require fluffydiscord/sylius-honkers-bundle
 ```
 
-### 2. Register the bundle
+### 2. Register the bundles
 
+Both the vanilla Symfony bundle (endpoints, security) and this Sylius wrapper are registered in
 `config/bundles.php`:
 
 ```php
-FluffyDiscord\SyliusChatbotBundle\FluffyDiscordSyliusChatbotBundle::class => ['all' => true],
+FluffyDiscord\HonkersBundle\FluffyDiscordHonkersBundle::class => ['all' => true],
+FluffyDiscord\SyliusHonkersBundle\FluffyDiscordSyliusHonkersBundle::class => ['all' => true],
 ```
 
 ### 3. Routes
 
-`config/routes/fluffydiscord_sylius_chatbot.yaml`:
+The routes are owned by the Symfony bundle. `config/routes/fluffy_discord_honkers.yaml`:
 
 ```yaml
-fluffydiscord_sylius_chatbot:
-    resource: '@FluffyDiscordSyliusChatbotBundle/config/routes.php'
+fluffy_discord_honkers:
+    resource: '@FluffyDiscordHonkersBundle/config/routes.php'
 ```
 
 The endpoints live under `/chatbot/v1` on the shop host and must not be behind the shop's `_locale` prefix.
 
-### 4. Bundle configuration
+### 4. Configuration
 
-`config/packages/fluffydiscord_sylius_chatbot.yaml`:
+The shared API secret belongs to the Symfony bundle.
+`config/packages/fluffy_discord_honkers.yaml`:
 
 ```yaml
-fluffy_discord_sylius_chatbot:
+fluffy_discord_honkers:
     api_secret: '%env(CHATBOT_API_SECRET)%'
+```
+
+Everything Sylius-specific (backend URL, ingest secret, widget) belongs to this bundle.
+`config/packages/fluffy_discord_sylius_honkers.yaml`:
+
+```yaml
+fluffy_discord_sylius_honkers:
     backend_url: '%env(CHATBOT_BACKEND_URL)%'
     ingest_secret: '%env(CHATBOT_INGEST_SECRET)%'
     widget:
@@ -84,8 +103,7 @@ CHATBOT_SITE_KEY=site-key
 When each channel is its own site on the backend, map channel codes to site keys:
 
 ```yaml
-fluffy_discord_sylius_chatbot:
-    api_secret: '%env(CHATBOT_API_SECRET)%'
+fluffy_discord_sylius_honkers:
     backend_url: '%env(CHATBOT_BACKEND_URL)%'
     ingest_secret: '%env(CHATBOT_INGEST_SECRET)%'
     widget:
@@ -99,7 +117,7 @@ fluffy_discord_sylius_chatbot:
 - A channel's site key is `channel_site_keys[<channel code>]`, else `site_key`. An entry is authoritative: a channel mapped to an empty value has no site key, it never falls back.
 - `site_key` is optional once `channel_site_keys` has an entry; it then only serves unmapped channels.
 - Keys are channel codes (not normalized, `cz-web` stays `cz-web`), values are strings — literal or `%env()%`.
-- `api_secret` and `ingest_secret` stay shared: every site must have the same shop tool-server secret and ingest secret configured.
+- `fluffy_discord_honkers.api_secret` and `ingest_secret` stay shared: every site must have the same shop tool-server secret and ingest secret configured.
 - With channel keys set, **disabled** channels get no catalog notifications and `notify-all --channel=<disabled>` is refused.
 - Empty `channel_site_keys` (the default) behaves like a single-site shop: channels, enabled or not, are never consulted for notifications.
 
@@ -118,10 +136,10 @@ security:
             pattern: ^/chatbot/v1
             stateless: true
             provider: chatbot_backend
-            entry_point: FluffyDiscord\SyliusChatbotBundle\Security\ApiAuthenticationFailureHandler
+            entry_point: FluffyDiscord\HonkersBundle\Security\ApiAuthenticationFailureHandler
             access_token:
-                token_handler: FluffyDiscord\SyliusChatbotBundle\Security\ApiSecretAuthenticator
-                failure_handler: FluffyDiscord\SyliusChatbotBundle\Security\ApiAuthenticationFailureHandler
+                token_handler: FluffyDiscord\HonkersBundle\Security\ApiSecretAuthenticator
+                failure_handler: FluffyDiscord\HonkersBundle\Security\ApiAuthenticationFailureHandler
         # shop: ...
     access_control:
         - { path: ^/chatbot/v1, roles: ROLE_CHATBOT_BACKEND }
@@ -212,8 +230,8 @@ The interface is autoconfigured; the input schema is generated from the DTO (`As
 `Assert\Choice` takes a fixed list or a static callback — no services. When the allowed values live in the database, use `#[ToolChoice]` instead: it is `Assert\Choice` with the choices loaded from a service implementing `ToolChoiceLoaderInterface` (autoconfigured). The loaded values become the property's schema `enum` in the tool list, and Symfony's `ChoiceValidator` checks them when the tool is called.
 
 ```php
-use FluffyDiscord\SyliusChatbotBundle\Contract\ToolChoiceLoaderInterface;
-use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoice;
+use FluffyDiscord\Honkers\Contract\ToolChoiceLoaderInterface;
+use FluffyDiscord\Honkers\Validator\ToolChoice;
 
 readonly class RegionChoiceLoader implements ToolChoiceLoaderInterface
 {

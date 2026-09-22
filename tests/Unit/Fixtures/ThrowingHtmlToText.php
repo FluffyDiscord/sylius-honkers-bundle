@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
 
-use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
+use FluffyDiscord\Honkers\Text\HtmlToText;
 
-readonly class ThrowingHtmlToText extends HtmlToText
+class ThrowingHtmlToText extends HtmlToText
 {
     public function convert(string $html): string
     {

@@ -2,25 +2,25 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\DataSource;
+namespace FluffyDiscord\SyliusHonkersBundle\DataSource;
 
 use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Query\Expr\Join;
 use Doctrine\ORM\QueryBuilder;
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotDataSourceInterface;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ProductIndexabilityInterface;
-use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
-use FluffyDiscord\SyliusChatbotBundle\DTO\DocumentPage;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDefinition;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDocument;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
-use FluffyDiscord\SyliusChatbotBundle\Exception\AmbiguousChannelTaxonTreeException;
-use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
+use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
+use FluffyDiscord\Honkers\Cursor\CursorCodec;
+use FluffyDiscord\Honkers\DTO\DocumentPage;
+use FluffyDiscord\Honkers\DTO\SourceDefinition;
+use FluffyDiscord\Honkers\DTO\SourceDocument;
+use FluffyDiscord\Honkers\DTO\SourceQuery;
+use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Enum\DocumentKind;
+use FluffyDiscord\SyliusHonkersBundle\Exception\AmbiguousChannelTaxonTreeException;
+use FluffyDiscord\Honkers\Text\HtmlToText;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Core\Model\ProductInterface;
@@ -29,17 +29,17 @@ use Sylius\Component\Taxonomy\Model\TaxonInterface;
 use Sylius\Component\Taxonomy\Repository\TaxonRepositoryInterface;
 use Sylius\Resource\Model\TimestampableInterface;
 
-readonly class CategoriesDataSource implements ChatbotDataSourceInterface
+class CategoriesDataSource implements ChatbotDataSourceInterface
 {
     public function __construct(
-        private TaxonRepositoryInterface     $taxonRepository,
-        private ProductRepositoryInterface   $productRepository,
-        private ProductIndexabilityInterface $productIndexability,
-        private ChannelResolver              $channelResolver,
-        private CursorCodec                  $cursorCodec,
-        private HtmlToText                   $htmlToText,
-        private ChannelUrlGenerator          $channelUrlGenerator,
-        private LoggerInterface              $logger,
+        private readonly TaxonRepositoryInterface     $taxonRepository,
+        private readonly ProductRepositoryInterface   $productRepository,
+        private readonly ProductIndexabilityInterface $productIndexability,
+        private readonly ChannelResolver              $channelResolver,
+        private readonly CursorCodec                  $cursorCodec,
+        private readonly HtmlToText                   $htmlToText,
+        private readonly ChannelUrlGenerator          $channelUrlGenerator,
+        private readonly LoggerInterface              $logger,
     ) {
     }
 
@@ -47,7 +47,7 @@ readonly class CategoriesDataSource implements ChatbotDataSourceInterface
     {
         return new SourceDefinition(
             CatalogSourceName::Categories->value,
-            'fluffydiscord_sylius_chatbot.source.categories.description',
+            'fluffydiscord_honkers.source.categories.description',
         );
     }
 

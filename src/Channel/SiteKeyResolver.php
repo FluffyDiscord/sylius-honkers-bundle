@@ -2,26 +2,26 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Channel;
+namespace FluffyDiscord\SyliusHonkersBundle\Channel;
 
-use FluffyDiscord\SyliusChatbotBundle\DTO\SiteKeyRouting;
+use FluffyDiscord\SyliusHonkersBundle\DTO\SiteKeyRouting;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-readonly class SiteKeyResolver
+class SiteKeyResolver
 {
     /**
      * @param array<array-key, string> $channelSiteKeys
      */
     public function __construct(
-        private ChannelRepositoryInterface $channelRepository,
+        private readonly ChannelRepositoryInterface $channelRepository,
 
-        #[Autowire(param: 'fluffydiscord_sylius_chatbot.widget.site_key')]
-        private string $defaultSiteKey,
+        #[Autowire(param: 'fluffydiscord_honkers.widget.site_key')]
+        private readonly string $defaultSiteKey,
 
-        #[Autowire(param: 'fluffydiscord_sylius_chatbot.widget.channel_site_keys')]
-        private array $channelSiteKeys,
+        #[Autowire(param: 'fluffydiscord_honkers.widget.channel_site_keys')]
+        private readonly array $channelSiteKeys,
     ) {
     }
 

@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\DataSource;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\DataSource;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ProductIndexabilityInterface;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ProductViewFactoryInterface;
-use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
-use FluffyDiscord\SyliusChatbotBundle\DataSource\ProductsDataSource;
-use FluffyDiscord\SyliusChatbotBundle\DTO\ProductItem;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
-use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
-use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ProductViewFactoryInterface;
+use FluffyDiscord\Honkers\Cursor\CursorCodec;
+use FluffyDiscord\SyliusHonkersBundle\DataSource\ProductsDataSource;
+use FluffyDiscord\SyliusHonkersBundle\DTO\ProductItem;
+use FluffyDiscord\Honkers\DTO\SourceQuery;
+use FluffyDiscord\Honkers\Enum\DocumentKind;
+use FluffyDiscord\Honkers\Text\HtmlToText;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Sylius\Bundle\CoreBundle\Doctrine\ORM\ProductVariantRepository;

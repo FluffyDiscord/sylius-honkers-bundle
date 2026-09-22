@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\DTO;
+namespace FluffyDiscord\SyliusHonkersBundle\DTO;
 
-readonly class ProductItem implements \JsonSerializable
+class ProductItem implements \JsonSerializable
 {
     public function __construct(
-        public string  $code,
-        public string  $productCode,
-        public string  $name,
-        public string  $url,
-        public int     $priceMinor,
-        public string  $currency,
-        public ?string $imageUrl,
-        public bool    $inStock,
+        public readonly string  $code,
+        public readonly string  $productCode,
+        public readonly string  $name,
+        public readonly string  $url,
+        public readonly int     $priceMinor,
+        public readonly string  $currency,
+        public readonly ?string $imageUrl,
+        public readonly bool    $inStock,
     ) {
     }
 

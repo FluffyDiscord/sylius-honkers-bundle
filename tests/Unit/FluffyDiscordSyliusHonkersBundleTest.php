@@ -2,43 +2,31 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\Command\NotifyAllCommand;
-use FluffyDiscord\SyliusChatbotBundle\EventListener\CatalogChangeListener;
-use FluffyDiscord\SyliusChatbotBundle\FluffyDiscordSyliusChatbotBundle;
-use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
-use FluffyDiscord\SyliusChatbotBundle\Locale\ShopLocaleResolver;
-use FluffyDiscord\SyliusChatbotBundle\Registry\DataSourceRegistry;
-use FluffyDiscord\SyliusChatbotBundle\Registry\ToolChoiceLoaderRegistry;
-use FluffyDiscord\SyliusChatbotBundle\Schema\ArgumentsSchemaGenerator;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\NamedExtension;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionArguments;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RegionChoiceLoader;
-use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetExtension;
-use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetRuntime;
-use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoice;
-use FluffyDiscord\SyliusChatbotBundle\Validator\ToolChoiceValidator;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\FluffyDiscordSyliusHonkersBundle;
+use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\NamedExtension;
+use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetExtension;
+use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Channel\Context\ChannelContextInterface;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
-use Sylius\Component\Locale\Provider\LocaleCollectionProviderInterface;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
-use Symfony\Component\Validator\ConstraintValidatorInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Twig\Extension\ExtensionInterface;
 use Twig\Extension\RuntimeExtensionInterface;
 
-class FluffyDiscordSyliusChatbotBundleTest extends TestCase
+class FluffyDiscordSyliusHonkersBundleTest extends TestCase
 {
     public function testTheWidgetIsRegisteredAsATwigHookWhenTheShopHasThem(): void
     {
@@ -49,7 +37,7 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         $hooks = $container->getExtensionConfig('sylius_twig_hooks');
         $widget = $hooks[0]['hooks']['sylius_shop.base#javascripts']['fluffydiscord_chatbot_widget'];
 
-        self::assertSame('@FluffyDiscordSyliusChatbot/shop/widget.html.twig', $widget['template']);
+        self::assertSame('@FluffyDiscordSyliusHonkers/shop/widget.html.twig', $widget['template']);
         self::assertSame($this->getExpectedWidgetContext(), $widget['context']);
         self::assertSame([], $container->getExtensionConfig('sylius_ui'));
     }
@@ -65,7 +53,7 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         $events = $container->getExtensionConfig('sylius_ui');
         $widget = $events[0]['events']['sylius.shop.layout.javascripts']['blocks']['fluffydiscord_chatbot_widget'];
 
-        self::assertSame('@FluffyDiscordSyliusChatbot/shop/widget.html.twig', $widget['template']);
+        self::assertSame('@FluffyDiscordSyliusHonkers/shop/widget.html.twig', $widget['template']);
         self::assertSame($this->getExpectedWidgetContext(), $widget['context']);
         self::assertSame([], $container->getExtensionConfig('sylius_twig_hooks'));
     }
@@ -82,7 +70,7 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
 
     public function testTheChannelSiteKeysDefaultToNone(): void
     {
-        $config = $this->processConfiguration(['api_secret' => 'secret']);
+        $config = $this->processConfiguration([]);
 
         self::assertSame([], $config['widget']['channel_site_keys']);
     }
@@ -94,7 +82,6 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
     public function testValidChannelSiteKeysAreKeptVerbatim(array $channelSiteKeys): void
     {
         $config = $this->processConfiguration([
-            'api_secret' => 'secret',
             'widget' => ['channel_site_keys' => $channelSiteKeys],
         ]);
 
@@ -122,7 +109,6 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         $this->expectException(InvalidConfigurationException::class);
 
         $this->processConfiguration([
-            'api_secret' => 'secret',
             'widget' => ['channel_site_keys' => $channelSiteKeys],
         ]);
     }
@@ -144,15 +130,14 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         $container = new ContainerBuilder();
         $container->setParameter('kernel.environment', 'test');
         $container->setParameter('kernel.build_dir', sys_get_temp_dir());
-        $extension = (new FluffyDiscordSyliusChatbotBundle())->getContainerExtension();
+        $extension = (new FluffyDiscordSyliusHonkersBundle())->getContainerExtension();
 
         $extension->load([[
-            'api_secret' => 'secret',
             'widget' => ['site_key' => 'site-key', 'channel_site_keys' => ['CZ_WEB' => 'cz-key']],
         ]], $container);
 
-        self::assertSame(['CZ_WEB' => 'cz-key'], $container->getParameter('fluffydiscord_sylius_chatbot.widget.channel_site_keys'));
-        self::assertSame('site-key', $container->getParameter('fluffydiscord_sylius_chatbot.widget.site_key'));
+        self::assertSame(['CZ_WEB' => 'cz-key'], $container->getParameter('fluffydiscord_honkers.widget.channel_site_keys'));
+        self::assertSame('site-key', $container->getParameter('fluffydiscord_honkers.widget.site_key'));
     }
 
     public function testTheSiteKeyServicesWireInACompiledContainer(): void
@@ -164,10 +149,9 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         $container->registerForAutoconfiguration(RuntimeExtensionInterface::class)->addTag('twig.runtime');
         $this->registerShopServices($container);
 
-        $bundle = new FluffyDiscordSyliusChatbotBundle();
+        $bundle = new FluffyDiscordSyliusHonkersBundle();
         $bundle->build($container);
         $bundle->getContainerExtension()->load([[
-            'api_secret' => 'secret',
             'backend_url' => 'https://backend.test',
             'ingest_secret' => 'ingest-secret',
             'widget' => [
@@ -191,39 +175,10 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         self::assertSame('cz-key', $siteKeyResolver->getSiteKey('CZ_WEB'));
         self::assertSame('sk-key', $siteKeyResolver->getSiteKey('SK_WEB'));
         self::assertSame('site-key', $siteKeyResolver->getSiteKey('DE_WEB'));
-        self::assertInstanceOf(CatalogChangeListener::class, $container->get(CatalogChangeListener::class));
-        self::assertInstanceOf(NotifyAllCommand::class, $container->get(NotifyAllCommand::class));
+        self::assertInstanceOf(CatalogChangeNotifier::class, $container->get(CatalogChangeNotifier::class));
         self::assertInstanceOf(ChatbotWidgetRuntime::class, $container->get(ChatbotWidgetRuntime::class));
         self::assertTrue($container->getDefinition(ChatbotWidgetExtension::class)->hasTag('twig.extension'));
         self::assertTrue($container->getDefinition(ChatbotWidgetRuntime::class)->hasTag('twig.runtime'));
-    }
-
-    public function testAShopChoiceLoaderFeedsTheToolSchemaAndTheValidatorIsRegisteredInACompiledContainer(): void
-    {
-        $container = new ContainerBuilder();
-        $container->setParameter('kernel.environment', 'test');
-        $container->setParameter('kernel.build_dir', sys_get_temp_dir());
-        $container->registerForAutoconfiguration(ConstraintValidatorInterface::class)
-            ->addTag('validator.constraint_validator');
-
-        $bundle = new FluffyDiscordSyliusChatbotBundle();
-        $bundle->build($container);
-        $bundle->getContainerExtension()->load([['api_secret' => 'secret']], $container);
-        $this->keepOnlyWiredBundleServices($container, [
-            ArgumentsSchemaGenerator::class,
-            ToolChoiceLoaderRegistry::class,
-            ToolChoiceValidator::class,
-        ]);
-        $container->register(RegionChoiceLoader::class)->setAutoconfigured(true);
-        $container->compile();
-
-        $schemaGenerator = $container->get(ArgumentsSchemaGenerator::class);
-        $schema = $schemaGenerator->generate(RegionArguments::class);
-
-        self::assertFalse($container->hasDefinition(ToolChoice::class));
-        self::assertSame(['Praha', 'Moravskoslezský kraj'], $schema['properties']['region']['enum']);
-        self::assertTrue($container->getDefinition(ToolChoiceValidator::class)->hasTag('validator.constraint_validator'));
-        self::assertInstanceOf(ToolChoiceValidator::class, $container->get(ToolChoiceValidator::class));
     }
 
     /**
@@ -234,11 +189,7 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
         return [
             SiteKeyResolver::class,
             CatalogChangeNotifier::class,
-            CatalogChangeListener::class,
-            NotifyAllCommand::class,
-            DataSourceRegistry::class,
             ChannelResolver::class,
-            ShopLocaleResolver::class,
             ChatbotWidgetExtension::class,
             ChatbotWidgetRuntime::class,
         ];
@@ -250,7 +201,7 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
     private function keepOnlyWiredBundleServices(ContainerBuilder $container, array $wiredServiceIds): void
     {
         foreach (array_keys($container->getDefinitions()) as $serviceId) {
-            $isBundleService = str_starts_with($serviceId, 'FluffyDiscord\\SyliusChatbotBundle\\');
+            $isBundleService = str_starts_with($serviceId, 'FluffyDiscord\\SyliusHonkersBundle\\');
             if (!$isBundleService) {
                 continue;
             }
@@ -276,7 +227,6 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
             LoggerInterface::class => LoggerInterface::class,
             ChannelRepositoryInterface::class => ChannelRepositoryInterface::class,
             ChannelContextInterface::class => ChannelContextInterface::class,
-            'sylius.provider.locale_collection' => LocaleCollectionProviderInterface::class,
         ];
     }
 
@@ -302,7 +252,7 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
     private function processConfiguration(array $rawConfig): array
     {
         $container = new ContainerBuilder();
-        $extension = (new FluffyDiscordSyliusChatbotBundle())->getContainerExtension();
+        $extension = (new FluffyDiscordSyliusHonkersBundle())->getContainerExtension();
         $configuration = $extension->getConfiguration([], $container);
 
         return (new Processor())->processConfiguration($configuration, [$rawConfig]);
@@ -332,7 +282,7 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
             $container->registerExtension(new NamedExtension($alias));
         }
 
-        $container->prependExtensionConfig('fluffy_discord_sylius_chatbot', [
+        $container->prependExtensionConfig('fluffy_discord_sylius_honkers', [
             'backend_url' => 'https://backend.test',
             'widget' => $widgetConfig + ['site_key' => 'site-key'],
         ]);
@@ -351,6 +301,6 @@ class FluffyDiscordSyliusChatbotBundleTest extends TestCase
             __FILE__,
         );
 
-        (new FluffyDiscordSyliusChatbotBundle())->prependExtension($configurator, $container);
+        (new FluffyDiscordSyliusHonkersBundle())->prependExtension($configurator, $container);
     }
 }

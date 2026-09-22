@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
 
-use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotDataSourceInterface;
-use FluffyDiscord\SyliusChatbotBundle\DTO\DocumentPage;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDefinition;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceDocument;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
+use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
+use FluffyDiscord\Honkers\DTO\DocumentPage;
+use FluffyDiscord\Honkers\DTO\SourceDefinition;
+use FluffyDiscord\Honkers\DTO\SourceDocument;
+use FluffyDiscord\Honkers\DTO\SourceQuery;
 
 class RecordingDataSource implements ChatbotDataSourceInterface
 {

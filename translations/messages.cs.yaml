@@ -1,19 +1,8 @@
-fluffydiscord_sylius_chatbot:
+fluffydiscord_honkers:
     error:
-        unauthorized: 'Chybějící nebo neplatný API klíč.'
-        tool_not_found: 'Požadovaný nástroj neexistuje.'
-        source_not_found: 'Požadovaný datový zdroj neexistuje.'
-        validation_failed: 'Požadavek není platný.'
-        invalid_cursor: 'Stránkovací kurzor je neplatný.'
-        invalid_locale: 'Požadovaný jazyk není podporován.'
         invalid_channel: 'Požadovaný kanál neexistuje.'
         ambiguous_taxon_tree: 'Kanál nemá nastavený menu taxon a obchod má více stromů kategorií, takže nelze určit, které kategorie mu patří.'
-        bad_request: 'Požadavek nelze zpracovat.'
-        not_found: 'Požadovaný zdroj neexistuje.'
-        method_not_allowed: 'HTTP metoda není pro tento endpoint povolena.'
-        internal_error: 'Došlo k neočekávané chybě.'
     tool:
-        failure: 'Požadované informace se nyní nepodařilo získat. Zkuste to prosím později.'
         get_order_status:
             description: 'Vyhledá aktuální stav objednávky podle jejího čísla a e-mailu zákazníka.'
             form:

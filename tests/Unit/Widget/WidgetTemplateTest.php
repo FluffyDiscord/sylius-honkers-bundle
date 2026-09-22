@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Widget;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Widget;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetExtension;
-use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetRuntime;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetExtension;
+use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Channel\Context\ChannelContextInterface;
 use Sylius\Component\Channel\Context\ChannelNotFoundException;

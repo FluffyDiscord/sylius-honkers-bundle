@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
 
 class AppVariableDouble
 {

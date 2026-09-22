@@ -2,19 +2,20 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Command;
+namespace FluffyDiscord\SyliusHonkersBundle\Command;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ChatbotDataSourceInterface;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusChatbotBundle\Exception\ChatbotApiException;
-use FluffyDiscord\SyliusChatbotBundle\Exception\InvalidChannelException;
-use FluffyDiscord\SyliusChatbotBundle\Exception\InvalidLocaleException;
-use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
-use FluffyDiscord\SyliusChatbotBundle\Locale\ShopLocaleResolver;
-use FluffyDiscord\SyliusChatbotBundle\Registry\DataSourceRegistry;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
+use FluffyDiscord\Honkers\Contract\ChatbotLocaleContextInterface;
+use FluffyDiscord\Honkers\DTO\SourceQuery;
+use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Exception\ChatbotApiException;
+use FluffyDiscord\SyliusHonkersBundle\Exception\InvalidChannelException;
+use FluffyDiscord\Honkers\Exception\InvalidLocaleException;
+use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\Honkers\Locale\LocaleMatcher;
+use FluffyDiscord\Honkers\Registry\DataSourceRegistry;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -30,11 +31,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class NotifyAllCommand extends Command
 {
     public function __construct(
-        private readonly DataSourceRegistry    $dataSourceRegistry,
-        private readonly CatalogChangeNotifier $catalogChangeNotifier,
-        private readonly ChannelResolver       $channelResolver,
-        private readonly ShopLocaleResolver    $localeResolver,
-        private readonly SiteKeyResolver       $siteKeyResolver,
+        private readonly DataSourceRegistry           $dataSourceRegistry,
+        private readonly CatalogChangeNotifier        $catalogChangeNotifier,
+        private readonly ChannelResolver              $channelResolver,
+        private readonly ChatbotLocaleContextInterface $localeContext,
+        private readonly LocaleMatcher                $localeMatcher,
+        private readonly SiteKeyResolver              $siteKeyResolver,
     ) {
         parent::__construct();
     }
@@ -296,7 +298,7 @@ class NotifyAllCommand extends Command
 
         $definitionLocales = $dataSource->getDefinition()->locales;
 
-        return array_values($definitionLocales ?? $this->localeResolver->getChannelLocales());
+        return array_values($definitionLocales ?? $this->localeContext->getChannelLocales());
     }
 
     /**
@@ -308,8 +310,8 @@ class NotifyAllCommand extends Command
             return null;
         }
 
-        $channelLocales = $this->localeResolver->getChannelLocales();
+        $channelLocales = $this->localeContext->getChannelLocales();
 
-        return $this->localeResolver->resolveServedLocaleOrFail($locale, $channelLocales);
+        return $this->localeMatcher->resolveServedLocaleOrFail($locale, $channelLocales);
     }
 }

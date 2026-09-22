@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\DataSource;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\DataSource;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
 use Doctrine\ORM\Query\Parameter;
 use Doctrine\ORM\QueryBuilder;
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusChatbotBundle\Channel\ChannelUrlGenerator;
-use FluffyDiscord\SyliusChatbotBundle\Contract\ProductIndexabilityInterface;
-use FluffyDiscord\SyliusChatbotBundle\Cursor\CursorCodec;
-use FluffyDiscord\SyliusChatbotBundle\DataSource\CategoriesDataSource;
-use FluffyDiscord\SyliusChatbotBundle\DTO\SourceQuery;
-use FluffyDiscord\SyliusChatbotBundle\Enum\DocumentKind;
-use FluffyDiscord\SyliusChatbotBundle\Exception\AmbiguousChannelTaxonTreeException;
-use FluffyDiscord\SyliusChatbotBundle\Text\HtmlToText;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
+use FluffyDiscord\Honkers\Cursor\CursorCodec;
+use FluffyDiscord\SyliusHonkersBundle\DataSource\CategoriesDataSource;
+use FluffyDiscord\Honkers\DTO\SourceQuery;
+use FluffyDiscord\Honkers\Enum\DocumentKind;
+use FluffyDiscord\SyliusHonkersBundle\Exception\AmbiguousChannelTaxonTreeException;
+use FluffyDiscord\Honkers\Text\HtmlToText;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Sylius\Bundle\CoreBundle\Doctrine\ORM\ProductRepository;

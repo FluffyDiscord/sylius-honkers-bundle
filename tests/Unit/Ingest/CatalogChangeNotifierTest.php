@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Ingest;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Ingest;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusChatbotBundle\Ingest\CatalogChangeNotifier;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\RecordingLogger;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingLogger;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LogLevel;

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Template;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Template;
 
-use FluffyDiscord\SyliusChatbotBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\AppVariableDouble;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
-use FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures\HookableMetadataDouble;
-use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetExtension;
-use FluffyDiscord\SyliusChatbotBundle\Twig\ChatbotWidgetRuntime;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\AppVariableDouble;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\HookableMetadataDouble;
+use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetExtension;
+use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Channel\Context\ChannelContextInterface;

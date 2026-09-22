@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Enum;
+namespace FluffyDiscord\SyliusHonkersBundle\Enum;
 
 enum CatalogSourceName: string
 {

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\Tests\Unit\Fixtures;
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
 
 use Sylius\Component\Core\Model\Channel;
 use Sylius\Component\Locale\Model\Locale;
 
-readonly class ChannelFixtureFactory
+class ChannelFixtureFactory
 {
     /**
      * @param list<string> $localeCodes

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusChatbotBundle\DTO;
+namespace FluffyDiscord\SyliusHonkersBundle\DTO;
 
-readonly class SiteKeyRouting
+class SiteKeyRouting
 {
     /**
      * @param array<string, list<string>> $siteKeysByLocale
@@ -12,9 +12,9 @@ readonly class SiteKeyRouting
      * @param list<string>                $channelCodesWithEmptySiteKey
      */
     public function __construct(
-        public array $siteKeysByLocale,
-        public array $channelCodesWithoutSiteKey = [],
-        public array $channelCodesWithEmptySiteKey = [],
+        public readonly array $siteKeysByLocale,
+        public readonly array $channelCodesWithoutSiteKey = [],
+        public readonly array $channelCodesWithEmptySiteKey = [],
     ) {
     }
 
