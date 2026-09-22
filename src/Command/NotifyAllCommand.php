@@ -31,12 +31,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class NotifyAllCommand extends Command
 {
     public function __construct(
-        private readonly DataSourceRegistry           $dataSourceRegistry,
-        private readonly CatalogChangeNotifier        $catalogChangeNotifier,
-        private readonly ChannelResolver              $channelResolver,
+        private readonly DataSourceRegistry            $dataSourceRegistry,
+        private readonly CatalogChangeNotifier         $catalogChangeNotifier,
+        private readonly ChannelResolver               $channelResolver,
         private readonly ChatbotLocaleContextInterface $localeContext,
-        private readonly LocaleMatcher                $localeMatcher,
-        private readonly SiteKeyResolver              $siteKeyResolver,
+        private readonly LocaleMatcher                 $localeMatcher,
+        private readonly SiteKeyResolver               $siteKeyResolver,
     ) {
         parent::__construct();
     }

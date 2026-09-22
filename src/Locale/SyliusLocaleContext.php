@@ -14,7 +14,7 @@ class SyliusLocaleContext implements ChatbotLocaleContextInterface
     public function __construct(
         private readonly ChannelResolver        $channelResolver,
         private readonly LocaleContextInterface $localeContext,
-        private readonly LocaleMatcher           $localeMatcher,
+        private readonly LocaleMatcher          $localeMatcher,
     ) {
     }
 
