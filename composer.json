@@ -5,16 +5,6 @@
     "license": "proprietary",
     "minimum-stability": "dev",
     "prefer-stable": true,
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/FluffyDiscord/symfony-honkers-bundle.git"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/FluffyDiscord/honkers-sdk.git"
-        }
-    ],
     "require": {
         "php": "^8.1",
         "ext-intl": "*",
