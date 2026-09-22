@@ -9,7 +9,7 @@ use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Events;
-use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelPricingInterface;

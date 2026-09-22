@@ -9,7 +9,7 @@ use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
 use FluffyDiscord\Honkers\Contract\ChatbotLocaleContextInterface;
 use FluffyDiscord\Honkers\DTO\SourceQuery;
-use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Exception\ChatbotApiException;
 use FluffyDiscord\SyliusHonkersBundle\Exception\InvalidChannelException;
 use FluffyDiscord\Honkers\Exception\InvalidLocaleException;
@@ -44,7 +44,7 @@ class NotifyAllCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('source', null, InputOption::VALUE_REQUIRED, 'Only this catalog source (products, categories).')
+            ->addOption('source', null, InputOption::VALUE_REQUIRED, 'Only this catalog source (products, categories, cms_pages).')
             ->addOption('locale', null, InputOption::VALUE_REQUIRED, 'Only this locale code.')
             ->addOption('channel', null, InputOption::VALUE_REQUIRED, 'Channel code to read the catalog for; defaults to the context channel.');
     }
@@ -154,7 +154,7 @@ class NotifyAllCommand extends Command
         $siteKey = $this->siteKeyResolver->getSiteKey($channelCode);
         if ($siteKey === '') {
             return sprintf(
-                'The channel "%s" has no site key, nothing can be announced. Set: widget.channel_site_keys.%s or widget.site_key.',
+                'The channel "%s" has no site key, nothing can be announced. Set: channel_site_keys.%s or widget.site_key.',
                 $channelCode,
                 $channelCode,
             );

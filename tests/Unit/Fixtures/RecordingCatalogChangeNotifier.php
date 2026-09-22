@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
 
+use FluffyDiscord\Honkers\DTO\CatalogChangeResult;
+use FluffyDiscord\Honkers\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\DTO\NotificationOutcome;
-use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
+use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Psr18Client;
 
 class RecordingCatalogChangeNotifier extends CatalogChangeNotifier
 {
@@ -20,10 +23,14 @@ class RecordingCatalogChangeNotifier extends CatalogChangeNotifier
     public array $notifications = [];
 
     public function __construct(
-        SiteKeyResolver        $siteKeyResolver,
+        SiteKeyResolver       $siteKeyResolver,
         private readonly bool $acceptsNotifications = true,
     ) {
-        parent::__construct(new MockHttpClient(), new NullLogger(), $siteKeyResolver, 'https://backend.test', 'secret', 'test');
+        $psr18Client = new Psr18Client(new MockHttpClient());
+        $factory = new Psr17Factory();
+        $ingestClient = new CatalogIngestClient($psr18Client, $factory, $factory, 'https://backend.test', 'secret');
+
+        parent::__construct($ingestClient, new NullLogger(), $siteKeyResolver, 'https://backend.test', 'secret', 'test');
     }
 
     public function collect(CatalogSourceName $source, string $locale, string $externalId): void
@@ -36,9 +43,9 @@ class RecordingCatalogChangeNotifier extends CatalogChangeNotifier
         string $locale,
         array $externalIds,
         ?string $channelCode = null,
-    ): NotificationOutcome {
+    ): CatalogChangeResult {
         $this->notifications[] = [$source, $locale, $externalIds, $channelCode];
 
-        return new NotificationOutcome($this->acceptsNotifications);
+        return new CatalogChangeResult($this->acceptsNotifications);
     }
 }

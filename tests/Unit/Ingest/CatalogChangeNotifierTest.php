@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Ingest;
 
+use FluffyDiscord\Honkers\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
 use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
 use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingLogger;
+use Nyholm\Psr7\Factory\Psr17Factory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LogLevel;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Psr18Client;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 class CatalogChangeNotifierTest extends TestCase
@@ -47,8 +50,11 @@ class CatalogChangeNotifierTest extends TestCase
             return array_shift($responses) ?? new MockResponse('', ['http_code' => 202]);
         });
 
+        $factory = new Psr17Factory();
+        $ingestClient = new CatalogIngestClient(new Psr18Client($client), $factory, $factory, $backendUrl, 'ingest-secret');
+
         return new CatalogChangeNotifier(
-            $client,
+            $ingestClient,
             $this->logger,
             new SiteKeyResolver($channelRepository ?? $this->createChannelRepository($channelDefinitions), $defaultSiteKey, $channelSiteKeys),
             $backendUrl,
@@ -368,8 +374,8 @@ class CatalogChangeNotifierTest extends TestCase
     {
         yield 'default key' => ['site-key', [], []];
         yield 'channel keys only' => ['', ['CZ' => 'cz-key'], []];
-        yield 'neither' => ['', [], ['widget.site_key or widget.channel_site_keys']];
-        yield 'only empty channel keys' => ['', ['CZ' => ''], ['widget.site_key or widget.channel_site_keys']];
+        yield 'neither' => ['', [], ['widget.site_key or channel_site_keys']];
+        yield 'only empty channel keys' => ['', ['CZ' => ''], ['widget.site_key or channel_site_keys']];
     }
 
     public function testFlushPostsOnePayloadPerSourceAndLocale(): void
@@ -390,22 +396,6 @@ class CatalogChangeNotifierTest extends TestCase
             json_decode($firstRequest['options']['body'], true),
         );
         self::assertContains('Authorization: Bearer site-key.ingest-secret', $firstRequest['options']['headers']);
-    }
-
-    public function testEveryRequestCarriesTheBoundedTimeouts(): void
-    {
-        $notifier = $this->createNotifier([]);
-
-        $notifier->collect(CatalogSourceName::Products, 'cs_CZ', 'T-SHIRT-01');
-        $notifier->collect(CatalogSourceName::Categories, 'en_US', 'T_SHIRTS');
-        $notifier->flush();
-        $notifier->notify(CatalogSourceName::Products, 'sk_SK', ['T-SHIRT-01']);
-
-        self::assertCount(3, $this->capturedRequests);
-        foreach ($this->capturedRequests as $request) {
-            self::assertSame(2.0, $request['options']['timeout']);
-            self::assertSame(5.0, $request['options']['max_duration']);
-        }
     }
 
     public function testAnUnconfiguredNotifierNeverBuildsARequest(): void

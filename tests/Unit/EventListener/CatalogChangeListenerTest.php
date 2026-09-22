@@ -9,7 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\SyliusHonkersBundle\EventListener\CatalogChangeListener;
 use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
 use PHPUnit\Framework\TestCase;

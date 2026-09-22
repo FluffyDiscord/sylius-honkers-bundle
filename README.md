@@ -1,6 +1,6 @@
-# FluffyDiscord Sylius Honkers Bundle
+# FluffyDiscord Sylius honkers.dev Bundle
 
-Plug-and-play Sylius wrapper for the Honkers chatbot tool-server. It adds the Sylius default tools,
+Plug-and-play Sylius wrapper for the honkers.dev chatbot tool-server. It adds the Sylius default tools,
 data sources and the shop widget on top of two lower layers:
 
 - [`fluffydiscord/honkers-sdk`](https://github.com/FluffyDiscord/honkers-sdk) — the
@@ -60,19 +60,12 @@ The endpoints live under `/chatbot/v1` on the shop host and must not be behind t
 
 ### 4. Configuration
 
-The shared API secret belongs to the Symfony bundle.
+The connection and widget config belong to the Symfony bundle.
 `config/packages/fluffy_discord_honkers.yaml`:
 
 ```yaml
 fluffy_discord_honkers:
     api_secret: '%env(CHATBOT_API_SECRET)%'
-```
-
-Everything Sylius-specific (backend URL, ingest secret, widget) belongs to this bundle.
-`config/packages/fluffy_discord_sylius_honkers.yaml`:
-
-```yaml
-fluffy_discord_sylius_honkers:
     backend_url: '%env(CHATBOT_BACKEND_URL)%'
     ingest_secret: '%env(CHATBOT_INGEST_SECRET)%'
     widget:
@@ -81,11 +74,11 @@ fluffy_discord_sylius_honkers:
         cdn_url: '%env(CHATBOT_WIDGET_CDN_URL)%'
 ```
 
-`backend_url` is used by the `backend-url` attribute (the widget's API origin) and the catalog change notifier. `widget.backend_url` still works as a deprecated alias and is used when the root value is empty.
+`backend_url` is the honkers.dev origin — used by the widget's `backend-url` attribute and the catalog change notifier.
 
 `widget.cdn_url` is the URL the `<script src>` loads `chat.js` from — set it to the Bunny CDN URL the backend publishes to via `chatbot:widget:deploy` (it must equal the backend's `BUNNY_CDN_PURGE_URL`). Only the script bytes move to the CDN; every API call still goes to `backend_url`. When empty it falls back to `{backend_url}/widget/v1/chat.js` (backend-served).
 
-`widget.enabled` must be a literal boolean (it decides at compile time whether the widget hook is registered).
+`widget.enabled` must be a literal boolean (the widget hook is registered at build time).
 
 `.env`:
 
@@ -100,24 +93,20 @@ CHATBOT_SITE_KEY=site-key
 
 #### One site per channel
 
-When each channel is its own site on the backend, map channel codes to site keys:
+When each channel is its own site on the backend, map channel codes to site keys in this bundle.
+`config/packages/fluffy_discord_sylius_honkers.yaml`:
 
 ```yaml
 fluffy_discord_sylius_honkers:
-    backend_url: '%env(CHATBOT_BACKEND_URL)%'
-    ingest_secret: '%env(CHATBOT_INGEST_SECRET)%'
-    widget:
-        site_key: '%env(CHATBOT_SITE_KEY)%'
-        channel_site_keys:
-            CZ_WEB: '%env(CHATBOT_SITE_KEY_CZ)%'
-            SK_WEB: '%env(CHATBOT_SITE_KEY_SK)%'
-            DE_WEB: 'pk_live_de'
+    channel_site_keys:
+        CZ_WEB: '%env(CHATBOT_SITE_KEY_CZ)%'
+        SK_WEB: '%env(CHATBOT_SITE_KEY_SK)%'
+        DE_WEB: 'pk_live_de'
 ```
 
-- A channel's site key is `channel_site_keys[<channel code>]`, else `site_key`. An entry is authoritative: a channel mapped to an empty value has no site key, it never falls back.
-- `site_key` is optional once `channel_site_keys` has an entry; it then only serves unmapped channels.
+- A channel's site key is `channel_site_keys[<channel code>]`, else `fluffy_discord_honkers.widget.site_key`. An entry is authoritative: a channel mapped to an empty value has no site key, it never falls back.
+- `widget.site_key` is optional once `channel_site_keys` has an entry; it then only serves unmapped channels.
 - Keys are channel codes (not normalized, `cz-web` stays `cz-web`), values are strings — literal or `%env()%`.
-- `fluffy_discord_honkers.api_secret` and `ingest_secret` stay shared: every site must have the same shop tool-server secret and ingest secret configured.
 - With channel keys set, **disabled** channels get no catalog notifications and `notify-all --channel=<disabled>` is refused.
 - Empty `channel_site_keys` (the default) behaves like a single-site shop: channels, enabled or not, are never consulted for notifications.
 
@@ -306,20 +295,20 @@ Both are wired as container aliases; redefine the alias in the shop's `services.
 
 ### Catalog change notifications
 
-These keep the backend's ingested sources fresh. Saving a `Product`, a `ProductTranslation`, a `Taxon` or a `TaxonTranslation` collects the changed external ids and one `POST {backend_url}/api/v1/catalog/changes` per `(source, locale)` is sent on `kernel.terminate` and on `ConsoleEvents::TERMINATE` (max 500 ids per request, 2 s timeout, 5 s max duration). The whole flush shares a single 5 s wall-clock budget: the requests are issued together and drained in one `stream()` loop, and whatever has not finished when the budget is spent is abandoned — a dropped notification costs at most one nightly cycle of staleness.
+These keep the backend's ingested sources fresh. Saving a `Product`, a `ProductTranslation`, a `Taxon` or a `TaxonTranslation` collects the changed external ids and one `POST {backend_url}/api/v1/catalog/changes` per `(source, locale)` is sent on `kernel.terminate` and on `ConsoleEvents::TERMINATE` (max 500 ids per request). Each request carries a 2 s timeout and 5 s max duration and is sent synchronously, one at a time, through the SDK's `CatalogIngestClient`; a failure is logged and swallowed — a dropped notification costs at most one nightly cycle of staleness.
 
-A `ProductTranslation` change announces its own locale only, a `TaxonTranslation` change announces `categories` for its own locale, a `Product` change announces every locale of `sylius_locale`, and a `Taxon` change announces `categories` for every locale without fanning out to its products. Every failure is logged as a warning and swallowed — a notification never breaks a shop request. With `backend_url` or `ingest_secret` empty, or with neither `widget.site_key` nor any `widget.channel_site_keys` entry set, nothing is sent and a warning names the missing key.
+A `ProductTranslation` change announces its own locale only, a `TaxonTranslation` change announces `categories` for its own locale, a `Product` change announces every locale of `sylius_locale`, and a `Taxon` change announces `categories` for every locale without fanning out to its products. Every failure is logged as a warning and swallowed — a notification never breaks a shop request. With `backend_url` or `ingest_secret` empty, or with neither `widget.site_key` nor any `channel_site_keys` entry set, nothing is sent and a warning names the missing key.
 
 Which site receives a `(source, locale)`:
 
-| `widget.channel_site_keys` | Recipients |
+| `channel_site_keys` | Recipients |
 |---|---|
 | empty | the `widget.site_key` site, for every locale |
 | set | the site of every **enabled** channel serving that locale; channels resolving to the same site key share one request |
 
-With channel keys set, an enabled channel that serves a changed locale but resolves no key (unmapped, `site_key` empty) is skipped with a warning; a channel mapped to an empty value is skipped with a debug record. A locale no enabled channel serves is sent nowhere. The 500-id batching and the single 5 s flush budget cover every site's requests together.
+With channel keys set, an enabled channel that serves a changed locale but resolves no key (unmapped, `site_key` empty) is skipped with a warning; a channel mapped to an empty value is skipped with a debug record. A locale no enabled channel serves is sent nowhere. Every site's requests are sent one at a time in 500-id batches.
 
-`bin/console fluffydiscord:chatbot:notify-all [--source=products|categories] [--locale=cs_CZ] [--channel=code]` re-announces the whole catalog in 500-id batches, pausing 2 s between batches and honouring `Retry-After` on a 429. Pass `--channel` when no channel can be resolved from the CLI context; without `--locale` the locales are taken from the resolved channel, so each channel's catalog is paired with the locales that channel actually serves. Without channel keys the catalog goes to the `widget.site_key` site. With channel keys it goes to the resolved channel's site only, and a disabled channel or one without a site key aborts the run; run it once per channel. A `--locale` the source does not serve aborts the run instead of announcing a locale the backend cannot use.
+`bin/console fluffydiscord:chatbot:notify-all [--source=products|categories|cms_pages] [--locale=cs_CZ] [--channel=code]` re-announces the whole catalog in 500-id batches, pausing 2 s between batches and honouring `Retry-After` on a 429. Pass `--channel` when no channel can be resolved from the CLI context; without `--locale` the locales are taken from the resolved channel, so each channel's catalog is paired with the locales that channel actually serves. Without channel keys the catalog goes to the `widget.site_key` site. With channel keys it goes to the resolved channel's site only, and a disabled channel or one without a site key aborts the run; run it once per channel. A `--locale` the source does not serve aborts the run instead of announcing a locale the backend cannot use.
 
 ## Widget
 
@@ -330,7 +319,7 @@ When `widget.enabled` is true the bundle injects, via the `sylius_shop.base#java
 <ai-chat-widget site-key="{site_key}" locale="{app.locale}" backend-url="{backend_url}"></ai-chat-widget>
 ```
 
-`site_key` is resolved at render time by the `fluffydiscord_chatbot_site_key(fallback)` Twig function: the current channel's `widget.channel_site_keys` entry, else the template's own `site_key`. The shop's `ChannelContextInterface` decides the channel; without a resolvable channel the fallback is used. When the resolved key is empty nothing is rendered — neither the script nor the element.
+`site_key` is resolved at render time by the `fluffydiscord_chatbot_site_key(fallback)` Twig function: the current channel's `channel_site_keys` entry, else the template's own `site_key`. The shop's `ChannelContextInterface` decides the channel; without a resolvable channel the fallback is used. When the resolved key is empty nothing is rendered — neither the script nor the element.
 
 The template can also be included directly with a plain context — the channel key is still applied:
 

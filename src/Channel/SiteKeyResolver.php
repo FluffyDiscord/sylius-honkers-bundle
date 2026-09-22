@@ -20,7 +20,7 @@ class SiteKeyResolver
         #[Autowire(param: 'fluffydiscord_honkers.widget.site_key')]
         private readonly string $defaultSiteKey,
 
-        #[Autowire(param: 'fluffydiscord_honkers.widget.channel_site_keys')]
+        #[Autowire(param: 'fluffydiscord_sylius_honkers.channel_site_keys')]
         private readonly array $channelSiteKeys,
     ) {
     }

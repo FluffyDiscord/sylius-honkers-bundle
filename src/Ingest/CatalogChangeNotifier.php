@@ -4,20 +4,18 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusHonkersBundle\Ingest;
 
+use FluffyDiscord\Honkers\DTO\CatalogChange;
+use FluffyDiscord\Honkers\DTO\CatalogChangeResult;
+use FluffyDiscord\Honkers\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Exception\CatalogIngestException;
+use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\DTO\NotificationOutcome;
 use FluffyDiscord\SyliusHonkersBundle\DTO\SiteKeyRouting;
-use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\KernelEvents;
-use Symfony\Contracts\HttpClient\ChunkInterface;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Symfony\Contracts\HttpClient\ResponseInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
 class CatalogChangeNotifier implements ResetInterface
@@ -28,7 +26,7 @@ class CatalogChangeNotifier implements ResetInterface
     private bool $hasLoggedOverflow = false;
 
     public function __construct(
-        private readonly HttpClientInterface $backendClient,
+        private readonly CatalogIngestClient $catalogIngestClient,
         private readonly LoggerInterface     $logger,
         private readonly SiteKeyResolver     $siteKeyResolver,
 
@@ -45,7 +43,7 @@ class CatalogChangeNotifier implements ResetInterface
 
     public function getMaxExternalIdsPerRequest(): int
     {
-        return 500;
+        return $this->catalogIngestClient->getMaxExternalIdsPerRequest();
     }
 
     public function getMaxPendingExternalIds(): int
@@ -67,7 +65,7 @@ class CatalogChangeNotifier implements ResetInterface
         }
         $hasAnySiteKey = $this->siteKeyResolver->hasAnySiteKey();
         if (!$hasAnySiteKey) {
-            $missingKeys[] = 'widget.site_key or widget.channel_site_keys';
+            $missingKeys[] = 'widget.site_key or channel_site_keys';
         }
 
         return $missingKeys;
@@ -121,9 +119,7 @@ class CatalogChangeNotifier implements ResetInterface
         }
 
         $this->logSkippedChannels($siteKeyRouting);
-
-        $responses = $this->issueRequests($pendingChanges, $siteKeyRouting);
-        $this->drainWithinBudget($responses);
+        $this->dispatchChanges($pendingChanges, $siteKeyRouting);
     }
 
     /**
@@ -134,32 +130,38 @@ class CatalogChangeNotifier implements ResetInterface
         string $locale,
         array $externalIds,
         ?string $channelCode = null,
-    ): NotificationOutcome {
+    ): CatalogChangeResult {
         if ($externalIds === []) {
-            return new NotificationOutcome(true);
+            return new CatalogChangeResult(true);
         }
 
         $canNotify = $this->canNotify();
         if (!$canNotify) {
-            return new NotificationOutcome(false);
+            return new CatalogChangeResult(false);
         }
 
         $siteKey = $this->resolveSiteKey($channelCode);
         if ($siteKey === '') {
             $this->logMissingSiteKey($channelCode);
 
-            return new NotificationOutcome(false);
+            return new CatalogChangeResult(false);
         }
 
-        try {
-            $response = $this->requestChanges($source, $locale, $externalIds, $siteKey);
+        $batches = array_chunk($externalIds, $this->catalogIngestClient->getMaxExternalIdsPerRequest());
+        $accepted = true;
+        $retryAfterSeconds = null;
 
-            return $this->readOutcome($response);
-        } catch (\Throwable $exception) {
-            $this->logFailure($source, $locale, $siteKey, $exception);
-
-            return new NotificationOutcome(false);
+        foreach ($batches as $batch) {
+            $result = $this->sendToSite($source, $locale, $batch, $siteKey);
+            if (!$result->accepted) {
+                $accepted = false;
+            }
+            if ($result->retryAfterSeconds !== null) {
+                $retryAfterSeconds = $result->retryAfterSeconds;
+            }
         }
+
+        return new CatalogChangeResult($accepted, [], $retryAfterSeconds);
     }
 
     public function reset(): void
@@ -168,29 +170,36 @@ class CatalogChangeNotifier implements ResetInterface
         $this->hasLoggedOverflow = false;
     }
 
-    private function getTimeoutSeconds(): float
+    /**
+     * @param array<string, array{source: CatalogSourceName, locale: string, externalIds: array<string, true>}> $pendingChanges
+     */
+    private function dispatchChanges(array $pendingChanges, SiteKeyRouting $siteKeyRouting): void
     {
-        return 2.0;
+        $maxExternalIds = $this->catalogIngestClient->getMaxExternalIdsPerRequest();
+
+        foreach ($pendingChanges as $change) {
+            $externalIds = array_keys($change['externalIds']);
+            $batches = array_chunk($externalIds, $maxExternalIds);
+            foreach ($siteKeyRouting->getSiteKeys($change['locale']) as $siteKey) {
+                foreach ($batches as $batch) {
+                    $this->sendToSite($change['source'], $change['locale'], $batch, $siteKey);
+                }
+            }
+        }
     }
 
-    private function getMaxDurationSeconds(): float
+    /**
+     * @param list<string> $externalIds
+     */
+    private function sendToSite(CatalogSourceName $source, string $locale, array $externalIds, string $siteKey): CatalogChangeResult
     {
-        return 5.0;
-    }
+        try {
+            return $this->catalogIngestClient->send($siteKey, new CatalogChange($source, $locale, $externalIds));
+        } catch (CatalogIngestException $exception) {
+            $this->logFailure($source, $locale, $siteKey, $exception);
 
-    private function getFlushBudgetSeconds(): float
-    {
-        return 5.0;
-    }
-
-    private function getDefaultRetryAfterSeconds(): int
-    {
-        return 60;
-    }
-
-    private function getChangesPath(): string
-    {
-        return '/api/v1/catalog/changes';
+            return new CatalogChangeResult(false);
+        }
     }
 
     private function countPendingExternalIds(): int
@@ -265,193 +274,12 @@ class CatalogChangeNotifier implements ResetInterface
         }
     }
 
-    /**
-     * @param array<string, array{source: CatalogSourceName, locale: string, externalIds: array<string, true>}> $pendingChanges
-     *
-     * @return list<ResponseInterface>
-     */
-    private function issueRequests(array $pendingChanges, SiteKeyRouting $siteKeyRouting): array
-    {
-        $responses = [];
-        foreach ($pendingChanges as $change) {
-            $externalIds = array_keys($change['externalIds']);
-            $batches = array_chunk($externalIds, $this->getMaxExternalIdsPerRequest());
-            foreach ($siteKeyRouting->getSiteKeys($change['locale']) as $siteKey) {
-                foreach ($batches as $batch) {
-                    $response = $this->issueRequest($change['source'], $change['locale'], $batch, $siteKey);
-                    if ($response === null) {
-                        continue;
-                    }
-
-                    $responses[] = $response;
-                }
-            }
-        }
-
-        return $responses;
-    }
-
-    /**
-     * @param list<string> $externalIds
-     */
-    private function issueRequest(CatalogSourceName $source, string $locale, array $externalIds, string $siteKey): ?ResponseInterface
-    {
-        try {
-            return $this->requestChanges($source, $locale, $externalIds, $siteKey);
-        } catch (\Throwable $exception) {
-            $this->logFailure($source, $locale, $siteKey, $exception);
-
-            return null;
-        }
-    }
-
-    /**
-     * @param list<ResponseInterface> $responses
-     */
-    private function drainWithinBudget(array $responses): void
-    {
-        if ($responses === []) {
-            return;
-        }
-
-        $deadline = microtime(true) + $this->getFlushBudgetSeconds();
-
-        $unfinishedResponses = [];
-        foreach ($responses as $response) {
-            $unfinishedResponses[spl_object_id($response)] = $response;
-        }
-
-        try {
-            foreach ($this->backendClient->stream($responses, $this->getTimeoutSeconds()) as $response => $chunk) {
-                $this->consumeChunk($response, $chunk, $unfinishedResponses);
-
-                $isBudgetSpent = microtime(true) >= $deadline;
-                if ($isBudgetSpent) {
-                    break;
-                }
-            }
-        } catch (\Throwable $exception) {
-            $this->logger->warning('Chatbot: draining catalog notifications failed.', ['exception' => $exception]);
-        }
-
-        $this->abandonRemaining($unfinishedResponses);
-    }
-
-    /**
-     * @param array<int, ResponseInterface> $unfinishedResponses
-     */
-    private function consumeChunk(ResponseInterface $response, ChunkInterface $chunk, array &$unfinishedResponses): void
-    {
-        try {
-            $isTimeout = $chunk->isTimeout();
-            if ($isTimeout) {
-                return;
-            }
-
-            $isLast = $chunk->isLast();
-            if (!$isLast) {
-                return;
-            }
-
-            unset($unfinishedResponses[spl_object_id($response)]);
-            $this->readOutcome($response);
-        } catch (\Throwable $exception) {
-            unset($unfinishedResponses[spl_object_id($response)]);
-            $this->logger->warning('Chatbot: notifying the backend about catalog changes failed.', [
-                'target' => $this->readRequestTarget($response),
-                'exception' => $exception,
-            ]);
-        }
-    }
-
-    /**
-     * @param array<int, ResponseInterface> $unfinishedResponses
-     */
-    private function abandonRemaining(array $unfinishedResponses): void
-    {
-        foreach ($unfinishedResponses as $response) {
-            $target = $this->readRequestTarget($response);
-            $response->cancel();
-
-            $this->logger->warning('Chatbot: the catalog notification budget was spent, abandoning a request.', [
-                'target' => $target,
-                'flushBudgetSeconds' => $this->getFlushBudgetSeconds(),
-            ]);
-        }
-    }
-
-    private function readRequestTarget(ResponseInterface $response): string
-    {
-        $userData = $response->getInfo('user_data');
-        if (is_string($userData)) {
-            return $userData;
-        }
-
-        return 'unknown';
-    }
-
-    /**
-     * @param list<string> $externalIds
-     */
-    private function requestChanges(CatalogSourceName $source, string $locale, array $externalIds, string $siteKey): ResponseInterface
-    {
-        return $this->backendClient->request(Request::METHOD_POST, $this->buildChangesUrl(), [
-            'timeout' => $this->getTimeoutSeconds(),
-            'max_duration' => $this->getMaxDurationSeconds(),
-            'user_data' => $this->buildRequestTarget($source, $locale, $siteKey),
-            'headers' => ['Authorization' => 'Bearer ' . $siteKey . '.' . $this->ingestSecret],
-            'json' => [
-                'source' => $source->value,
-                'locale' => $locale,
-                'externalIds' => array_values($externalIds),
-            ],
-        ]);
-    }
-
-    private function readOutcome(ResponseInterface $response): NotificationOutcome
-    {
-        $target = $this->readRequestTarget($response);
-        $statusCode = $response->getStatusCode();
-
-        $isAccepted = $statusCode >= 200 && $statusCode < 300;
-        if ($isAccepted) {
-            return new NotificationOutcome(true);
-        }
-
-        if ($statusCode === Response::HTTP_TOO_MANY_REQUESTS) {
-            $retryAfterSeconds = $this->readRetryAfterSeconds($response->getHeaders(false));
-            $this->logger->warning('Chatbot: the backend is throttling catalog notifications.', [
-                'target' => $target,
-                'retryAfterSeconds' => $retryAfterSeconds,
-            ]);
-
-            return new NotificationOutcome(false, $retryAfterSeconds);
-        }
-
-        $this->logger->warning('Chatbot: the backend rejected a catalog notification.', [
-            'target' => $target,
-            'statusCode' => $statusCode,
-        ]);
-
-        return new NotificationOutcome(false);
-    }
-
     private function logFailure(CatalogSourceName $source, string $locale, string $siteKey, \Throwable $exception): void
     {
         $this->logger->warning('Chatbot: notifying the backend about catalog changes failed.', [
-            'target' => $this->buildRequestTarget($source, $locale, $siteKey),
+            'target' => $source->value . ' / ' . $locale . ' / ' . $siteKey,
             'exception' => $exception,
         ]);
-    }
-
-    private function buildRequestTarget(CatalogSourceName $source, string $locale, string $siteKey): string
-    {
-        return $source->value . ' / ' . $locale . ' / ' . $siteKey;
-    }
-
-    private function buildChangesUrl(): string
-    {
-        return rtrim($this->backendUrl, '/') . $this->getChangesPath();
     }
 
     private function canNotify(): bool
@@ -487,19 +315,5 @@ class CatalogChangeNotifier implements ResetInterface
         }
 
         return $this->environment === 'dev';
-    }
-
-    /**
-     * @param array<string, list<string>> $headers
-     */
-    private function readRetryAfterSeconds(array $headers): int
-    {
-        $retryAfter = $headers['retry-after'][0] ?? '';
-        $isSeconds = ctype_digit($retryAfter);
-        if (!$isSeconds) {
-            return $this->getDefaultRetryAfterSeconds();
-        }
-
-        return (int) $retryAfter;
     }
 }

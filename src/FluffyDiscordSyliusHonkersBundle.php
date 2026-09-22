@@ -20,36 +20,18 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
     {
         $definition->rootNode()
             ->children()
-                ->scalarNode('backend_url')->defaultValue('')->end()
-                ->scalarNode('ingest_secret')->defaultValue('')->end()
-                ->arrayNode('widget')
-                    ->addDefaultsIfNotSet()
-                    ->children()
-                        ->booleanNode('enabled')->defaultTrue()->end()
-                        ->scalarNode('backend_url')
-                            ->defaultValue('')
-                            ->setDeprecated(
-                                'fluffydiscord/sylius-honkers-bundle',
-                                '0.2',
-                                'The "%path%.%node%" option is deprecated, configure "fluffy_discord_sylius_honkers.backend_url" instead.',
-                            )
+                ->arrayNode('channel_site_keys')
+                    ->useAttributeAsKey('channel')
+                    ->normalizeKeys(false)
+                    ->validate()
+                        ->ifTrue(fn (array $channelSiteKeys): bool => $this->hasEmptyChannelCode($channelSiteKeys))
+                        ->thenInvalid('Every channel site key must be keyed by a non-empty channel code, got %s.')
+                    ->end()
+                    ->scalarPrototype()
+                        ->validate()
+                            ->ifTrue(fn (mixed $siteKey): bool => !is_string($siteKey))
+                            ->thenInvalid('Every channel site key must be a string, got %s.')
                         ->end()
-                        ->scalarNode('site_key')->defaultValue('')->end()
-                        ->arrayNode('channel_site_keys')
-                            ->useAttributeAsKey('channel')
-                            ->normalizeKeys(false)
-                            ->validate()
-                                ->ifTrue(fn (array $channelSiteKeys): bool => $this->hasEmptyChannelCode($channelSiteKeys))
-                                ->thenInvalid('Every channel site key must be keyed by a non-empty channel code, got %s.')
-                            ->end()
-                            ->scalarPrototype()
-                                ->validate()
-                                    ->ifTrue(fn (mixed $siteKey): bool => !is_string($siteKey))
-                                    ->thenInvalid('Every channel site key must be a string, got %s.')
-                                ->end()
-                            ->end()
-                        ->end()
-                        ->scalarNode('cdn_url')->defaultValue('')->end()
                     ->end()
                 ->end()
             ->end();
@@ -57,16 +39,16 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
 
     public function prependExtension(ContainerConfigurator $configurator, ContainerBuilder $container): void
     {
-        $rawConfig = $this->mergeRawConfig($container);
-        if ($rawConfig['widget']['enabled'] === false) {
+        $honkersConfig = $this->mergeHonkersConfig($container);
+        if ($honkersConfig['widget']['enabled'] === false) {
             return;
         }
 
-        $backendUrl = $this->resolveBackendUrl($rawConfig);
+        $backendUrl = (string) $honkersConfig['backend_url'];
         $widgetContext = [
             'backend_url' => $backendUrl,
-            'site_key' => $rawConfig['widget']['site_key'],
-            'widget_cdn_url' => $this->resolveWidgetCdnUrl($rawConfig, $backendUrl),
+            'site_key' => (string) $honkersConfig['widget']['site_key'],
+            'widget_cdn_url' => $this->resolveWidgetCdnUrl($honkersConfig, $backendUrl),
         ];
 
         $hasTwigHooks = $container->hasExtension('sylius_twig_hooks');
@@ -84,15 +66,8 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
 
     public function loadExtension(array $config, ContainerConfigurator $configurator, ContainerBuilder $container): void
     {
-        $backendUrl = $this->resolveBackendUrl($config);
-
         $configurator->parameters()
-            ->set('fluffydiscord_honkers.backend_url', $backendUrl)
-            ->set('fluffydiscord_honkers.ingest_secret', $config['ingest_secret'])
-            ->set('fluffydiscord_honkers.widget.enabled', $config['widget']['enabled'])
-            ->set('fluffydiscord_honkers.widget.backend_url', $backendUrl)
-            ->set('fluffydiscord_honkers.widget.site_key', $config['widget']['site_key'])
-            ->set('fluffydiscord_honkers.widget.channel_site_keys', $config['widget']['channel_site_keys']);
+            ->set('fluffydiscord_sylius_honkers.channel_site_keys', $config['channel_site_keys']);
 
         $configurator->import(__DIR__ . '/../config/services.php');
 
@@ -170,24 +145,9 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
         return '@FluffyDiscordSyliusHonkers/shop/widget.html.twig';
     }
 
-    private function getConfigAlias(): string
+    private function getHonkersConfigAlias(): string
     {
-        $extension = $this->getContainerExtension();
-
-        return (string) $extension?->getAlias();
-    }
-
-    /**
-     * @param array<string, mixed> $config
-     */
-    private function resolveBackendUrl(array $config): string
-    {
-        $rootBackendUrl = (string) ($config['backend_url'] ?? '');
-        if ($rootBackendUrl !== '') {
-            return $rootBackendUrl;
-        }
-
-        return (string) ($config['widget']['backend_url'] ?? '');
+        return 'fluffy_discord_honkers';
     }
 
     /**
@@ -204,25 +164,24 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{backend_url: string, widget: array{enabled: bool, site_key: string, cdn_url: string}}
      */
-    private function mergeRawConfig(ContainerBuilder $container): array
+    private function mergeHonkersConfig(ContainerBuilder $container): array
     {
         $mergedConfig = [
             'backend_url' => '',
             'widget' => [
                 'enabled' => true,
-                'backend_url' => '',
                 'site_key' => '',
                 'cdn_url' => '',
             ],
         ];
 
-        foreach ($container->getExtensionConfig($this->getConfigAlias()) as $rawConfig) {
+        foreach ($container->getExtensionConfig($this->getHonkersConfigAlias()) as $rawConfig) {
             if (isset($rawConfig['backend_url'])) {
                 $mergedConfig['backend_url'] = $rawConfig['backend_url'];
             }
-            foreach (['enabled', 'backend_url', 'site_key', 'cdn_url'] as $key) {
+            foreach (['enabled', 'site_key', 'cdn_url'] as $key) {
                 if (isset($rawConfig['widget'][$key])) {
                     $mergedConfig['widget'][$key] = $rawConfig['widget'][$key];
                 }

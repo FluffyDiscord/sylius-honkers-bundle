@@ -17,7 +17,7 @@ use FluffyDiscord\Honkers\DTO\DocumentPage;
 use FluffyDiscord\Honkers\DTO\SourceDefinition;
 use FluffyDiscord\Honkers\DTO\SourceDocument;
 use FluffyDiscord\Honkers\DTO\SourceQuery;
-use FluffyDiscord\SyliusHonkersBundle\Enum\CatalogSourceName;
+use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Enum\DocumentKind;
 use FluffyDiscord\SyliusHonkersBundle\Exception\AmbiguousChannelTaxonTreeException;
 use FluffyDiscord\Honkers\Text\HtmlToText;

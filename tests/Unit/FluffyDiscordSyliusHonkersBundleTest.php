@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit;
 
+use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
 use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\FluffyDiscordSyliusHonkersBundle;
@@ -22,7 +23,6 @@ use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Twig\Extension\ExtensionInterface;
 use Twig\Extension\RuntimeExtensionInterface;
 
@@ -72,7 +72,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
     {
         $config = $this->processConfiguration([]);
 
-        self::assertSame([], $config['widget']['channel_site_keys']);
+        self::assertSame([], $config['channel_site_keys']);
     }
 
     /**
@@ -82,10 +82,10 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
     public function testValidChannelSiteKeysAreKeptVerbatim(array $channelSiteKeys): void
     {
         $config = $this->processConfiguration([
-            'widget' => ['channel_site_keys' => $channelSiteKeys],
+            'channel_site_keys' => $channelSiteKeys,
         ]);
 
-        self::assertSame($channelSiteKeys, $config['widget']['channel_site_keys']);
+        self::assertSame($channelSiteKeys, $config['channel_site_keys']);
     }
 
     /**
@@ -109,7 +109,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $this->expectException(InvalidConfigurationException::class);
 
         $this->processConfiguration([
-            'widget' => ['channel_site_keys' => $channelSiteKeys],
+            'channel_site_keys' => $channelSiteKeys,
         ]);
     }
 
@@ -133,11 +133,10 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $extension = (new FluffyDiscordSyliusHonkersBundle())->getContainerExtension();
 
         $extension->load([[
-            'widget' => ['site_key' => 'site-key', 'channel_site_keys' => ['CZ_WEB' => 'cz-key']],
+            'channel_site_keys' => ['CZ_WEB' => 'cz-key'],
         ]], $container);
 
-        self::assertSame(['CZ_WEB' => 'cz-key'], $container->getParameter('fluffydiscord_honkers.widget.channel_site_keys'));
-        self::assertSame('site-key', $container->getParameter('fluffydiscord_honkers.widget.site_key'));
+        self::assertSame(['CZ_WEB' => 'cz-key'], $container->getParameter('fluffydiscord_sylius_honkers.channel_site_keys'));
     }
 
     public function testTheSiteKeyServicesWireInACompiledContainer(): void
@@ -149,15 +148,14 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $container->registerForAutoconfiguration(RuntimeExtensionInterface::class)->addTag('twig.runtime');
         $this->registerShopServices($container);
 
+        $container->setParameter('fluffydiscord_honkers.backend_url', 'https://backend.test');
+        $container->setParameter('fluffydiscord_honkers.ingest_secret', 'ingest-secret');
+        $container->setParameter('fluffydiscord_honkers.widget.site_key', 'site-key');
+
         $bundle = new FluffyDiscordSyliusHonkersBundle();
         $bundle->build($container);
         $bundle->getContainerExtension()->load([[
-            'backend_url' => 'https://backend.test',
-            'ingest_secret' => 'ingest-secret',
-            'widget' => [
-                'site_key' => 'site-key',
-                'channel_site_keys' => ['CZ_WEB' => 'cz-key', 'SK_WEB' => '%env(CHATBOT_TEST_SITE_KEY_SK)%'],
-            ],
+            'channel_site_keys' => ['CZ_WEB' => 'cz-key', 'SK_WEB' => '%env(CHATBOT_TEST_SITE_KEY_SK)%'],
         ]], $container);
         $this->keepOnlyWiredBundleServices($container, $this->getWiredServiceIds());
         $_ENV['CHATBOT_TEST_SITE_KEY_SK'] = 'sk-key';
@@ -223,7 +221,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
     private function getShopServiceClasses(): array
     {
         return [
-            HttpClientInterface::class => HttpClientInterface::class,
+            CatalogIngestClient::class => CatalogIngestClient::class,
             LoggerInterface::class => LoggerInterface::class,
             ChannelRepositoryInterface::class => ChannelRepositoryInterface::class,
             ChannelContextInterface::class => ChannelContextInterface::class,
@@ -282,7 +280,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
             $container->registerExtension(new NamedExtension($alias));
         }
 
-        $container->prependExtensionConfig('fluffy_discord_sylius_honkers', [
+        $container->prependExtensionConfig('fluffy_discord_honkers', [
             'backend_url' => 'https://backend.test',
             'widget' => $widgetConfig + ['site_key' => 'site-key'],
         ]);

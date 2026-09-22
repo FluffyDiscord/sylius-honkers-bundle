@@ -37,6 +37,7 @@
     },
     "require-dev": {
         "monsieurbiz/sylius-cms-page-plugin": "^2.2",
+        "nyholm/psr7": "^1.8",
         "phpunit/phpunit": "^11.0 || ^12.0 || ^13.0"
     },
     "autoload": {
