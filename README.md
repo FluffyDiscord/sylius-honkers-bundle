@@ -279,10 +279,19 @@ by the catalog-change notifications below (delta) and by the backend's own full-
 **Shipped sources**
 
 - `products` — indexable channel products per locale with `ProductMetadata` (`code, name, url, imageUrl, priceMinor, currency, inStock, taxons, attributes`); `taxons` carries taxon **codes**, the taxon names and the main taxon path live in the document text.
-- `categories` — enabled taxons of the channel tree per locale (`code, name, path, url, productCount`). The tree is the channel's **menu taxon** subtree; within it a taxon is served only when every ancestor *below* the tree top is enabled too, so a disabled branch never leaks its children. The tree top itself — the menu taxon, or the tree root when there is none — never disqualifies anything beneath it, so disabling it empties the channel's menu without emptying this source; Sylius's own menu makes the same call (`TaxonRepository::findChildrenByChannelMenuTaxon()` filters `enabled` on the rendered children only). The menu taxon **is** served as a category document, a bare tree root is not. A channel **without** a menu taxon serves the shop's only taxon tree, and is refused with `409 ambiguous_taxon_tree` when the shop has several — there is then no way to tell this channel's categories from another channel's. `productCount` counts the taxon's whole nested-set subtree and only products passing `ProductIndexabilityInterface`, so it agrees with the category page (`include_all_descendants: true`) and with what the chatbot can return.
+- `categories` — enabled taxons of the channel tree per locale (`code, name, path, url, productCount`).
+  - Tree = the channel's **menu taxon** subtree. A taxon is served only when every ancestor *below* the tree top is enabled, so a disabled branch never leaks its children.
+  - The tree top (menu taxon, or tree root when there is none) never disqualifies what is beneath it. Disabling it empties the channel's menu without emptying this source — Sylius's own menu filters `enabled` on rendered children only (`TaxonRepository::findChildrenByChannelMenuTaxon()`).
+  - The menu taxon is served as a category document; a bare tree root is not.
+  - A channel with no menu taxon serves the shop's only taxon tree. With several trees it is refused `409 ambiguous_taxon_tree` — the channel's categories cannot be told from another channel's.
+  - `productCount` counts the taxon's whole nested-set subtree, only products passing `ProductIndexabilityInterface` — so it agrees with the category page (`include_all_descendants: true`) and with what the chatbot returns.
 - `cms_pages` — enabled Monsieur Biz CMS pages per locale (registered only when the plugin is installed).
 
-Every absolute URL a source or a tool emits — page URLs and `imageUrl` alike — is built on the **resolved channel's hostname**, not on the host the request arrived at (the channel's hostname is empty → the request host stands in). A read for `channel=X` therefore always hands back links on X's own domain. Only the host is swapped. Sylius stores no per-channel *scheme* or *port*, so both still come from the request context: set `router.request_context.scheme` (and `host`) for `notify-all`, which runs outside a request and would otherwise emit `http://`, and expect a shop served on a non-standard port to carry that port into every channel's URLs. One caveat on `imageUrl`: the swap reaches Liip's resolver because it shares the router's `RequestContext`, but a `liip_imagine` **`cache` resolver** in front of `web_path` memoises the finished absolute URL under a host-less key, so the first channel read would then feed its host to every other channel. Keep the chatbot's image filter on a host-agnostic resolver.
+Every absolute URL a source or tool emits (page URLs and `imageUrl`) is built on the **resolved channel's hostname**, not the request host. A read for `channel=X` returns links on X's domain. Only the host is swapped.
+
+- Channel hostname empty → the request host stands in.
+- Sylius stores no per-channel *scheme* or *port*, so both come from the request context. Set `router.request_context.scheme` (and `host`) for `notify-all` — it runs outside a request and would otherwise emit `http://`. A shop on a non-standard port carries that port into every channel's URLs.
+- `imageUrl`: the swap reaches Liip's resolver (it shares the router's `RequestContext`), but a `liip_imagine` **`cache` resolver** in front of `web_path` memoises the finished absolute URL under a host-less key — the first channel read then feeds its host to every other channel. Keep the chatbot's image filter on a host-agnostic resolver.
 
 **Adding a data source** — implement `ChatbotDataSourceInterface` the same way a tool is added; `SourceDefinition::$locales = null` means "all locales of the current channel".
 
@@ -326,7 +335,7 @@ When `widget.enabled` is true the bundle injects, via the `sylius_shop.base#java
 The template can also be included directly with a plain context — the channel key is still applied:
 
 ```twig
-{% include '@FluffyDiscordSyliusChatbot/shop/widget.html.twig' with {
+{% include '@FluffyDiscordSyliusHonkers/shop/widget.html.twig' with {
     backend_url: 'https://chatbot.example.com',
     site_key: 'site-key',
     widget_cdn_url: '',
