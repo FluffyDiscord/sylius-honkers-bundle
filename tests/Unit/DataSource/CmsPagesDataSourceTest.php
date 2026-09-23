@@ -79,12 +79,12 @@ class CmsPagesDataSourceTest extends TestCase
             new CursorCodec(),
             $htmlToText ?? new HtmlToText(),
             new ChannelUrlGenerator($router),
-            $this->createRichEditorTwig(),
+            $this->createRichEditor(),
             $logger ?? new NullLogger(),
         );
     }
 
-    private function createRichEditorTwig(): Environment
+    private function createRichEditor(): RichEditorExtension
     {
         $loader = new FilesystemLoader();
         $loader->addPath(
@@ -100,16 +100,17 @@ class CmsPagesDataSourceTest extends TestCase
         $registry->addUiElement($this->createUiElement('monsieurbiz.html', 'html.html.twig'));
         $registry->addUiElement($this->createUiElement('broken.element', 'missing.html.twig'));
 
-        $twig->addExtension(new RichEditorExtension(
+        $richEditor = new RichEditorExtension(
             $registry,
             $twig,
             'monsieurbiz.html',
             'content',
             '/media/',
             sys_get_temp_dir(),
-        ));
+        );
+        $twig->addExtension($richEditor);
 
-        return $twig;
+        return $richEditor;
     }
 
     private function createUiElement(string $code, string $frontTemplate): UiElement

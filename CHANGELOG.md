@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.2.2 - 2026-09-23
+
+### Changed
+
+- `CmsPagesDataSource` calls `RichEditorExtension::renderField()` directly instead of compiling a Twig template
+  around the `monsieurbiz_richeditor_render_field` filter. Same output; a shop without the rich-editor plugin now
+  fails at container build instead of at sync time.
+
+### BC breaks
+
+- `CmsPagesDataSource::__construct()` — the 6th parameter added in v1.2.1 is now
+  `MonsieurBiz\SyliusRichEditorPlugin\Twig\RichEditorExtension $richEditor`, not `Twig\Environment`.
+  Autowired installations need no change.
+
 ## v1.2.1 - 2026-09-23
 
 ### Fixed
