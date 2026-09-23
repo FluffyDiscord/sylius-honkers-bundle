@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — taxon roots
+
+### BC breaks
+
+- `CategoriesDataSource::__construct()` — new 5th parameter `ChannelTaxonRootsInterface $channelTaxonRoots`.
+  Autowired installations need no change; only code constructing the data source by hand is affected.
+
+### Added
+
+- `ChannelTaxonRootsInterface` — decides which taxon trees a channel indexes when it names no menu taxon.
+  The shipped `ChannelTaxonRoots` keeps today's behaviour: one tree is used, several raise
+  `AmbiguousChannelTaxonTreeException` (HTTP 409) rather than publishing another channel's categories.
+  A shop whose channels deliberately **share** one taxonomy — no per-channel root taxons — now has a seam:
+  alias the interface to its own implementation returning every root, and `categories` indexes instead of
+  refusing. Before this, that shop could only be fixed by giving every channel a menu taxon.
+
 ## Unreleased
 
 ### Added
