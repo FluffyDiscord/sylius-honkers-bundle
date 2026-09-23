@@ -31,6 +31,26 @@ class ChannelResolver implements ResetInterface
         return $this->resolve($this->overrideCode);
     }
 
+    /**
+     * @return list<ChannelInterface>
+     */
+    public function getEnabledChannels(): array
+    {
+        $channels = [];
+
+        foreach ($this->channelRepository->findAll() as $channel) {
+            $isServing = $channel instanceof ChannelInterface && $channel->isEnabled();
+
+            if (!$isServing) {
+                continue;
+            }
+
+            $channels[] = $channel;
+        }
+
+        return $channels;
+    }
+
     public function resolve(?string $channelCode): ChannelInterface
     {
         if ($channelCode === null || $channelCode === '') {
