@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.2.1 - 2026-09-23
+
+### Fixed
+
+- `cms_pages` indexed MonsieurBiz rich-editor pages as their raw JSON (`[{"code":"monsieurbiz.html","data":…}]`).
+  Content now renders through the plugin's own `monsieurbiz_richeditor_render_field` filter before text extraction,
+  so the chatbot reads the page text. Plain-HTML content is unchanged. **Re-sync the `cms_pages` source** after
+  updating. A page whose element fails to render is logged and skipped, like a page whose text conversion fails.
+
+### BC breaks
+
+- `CmsPagesDataSource::__construct()` — new 6th parameter `Twig\Environment $twig`.
+  Autowired installations need no change; only code constructing the data source by hand is affected.
+
 ## Unreleased — taxon roots
 
 ### BC breaks

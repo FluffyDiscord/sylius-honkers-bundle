@@ -21,6 +21,9 @@ use FluffyDiscord\Honkers\Enum\DocumentKind;
 use FluffyDiscord\Honkers\Text\HtmlToText;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
+use Twig\Environment;
+use Twig\Error\Error as TwigError;
+use Twig\TemplateWrapper;
 
 class CmsPagesDataSource implements ChatbotDataSourceInterface
 {
@@ -30,6 +33,7 @@ class CmsPagesDataSource implements ChatbotDataSourceInterface
         private readonly CursorCodec             $cursorCodec,
         private readonly HtmlToText              $htmlToText,
         private readonly ChannelUrlGenerator     $channelUrlGenerator,
+        private readonly Environment             $twig,
         private readonly LoggerInterface         $logger,
     ) {
     }
@@ -79,14 +83,15 @@ class CmsPagesDataSource implements ChatbotDataSourceInterface
         }
 
         $pages = $queryBuilder->getQuery()->getResult();
+        $contentTemplate = $this->getRichEditorContentTemplate();
 
         $documents = [];
         $lastFetchedId = null;
         foreach ($pages as $page) {
             $lastFetchedId = $page->getId();
             try {
-                $document = $this->buildDocument($page, $channel, $locale);
-            } catch (\RuntimeException $exception) {
+                $document = $this->buildDocument($page, $channel, $locale, $contentTemplate);
+            } catch (\RuntimeException|TwigError $exception) {
                 $this->logger->error('Chatbot: building a CMS page document failed, skipping it.', [
                     'page' => $page->getCode() ?? 'id:' . $page->getId(),
                     'exception' => $exception,
@@ -117,8 +122,12 @@ class CmsPagesDataSource implements ChatbotDataSourceInterface
         return 200;
     }
 
-    private function buildDocument(PageInterface $page, ChannelInterface $channel, string $locale): ?SourceDocument
-    {
+    private function buildDocument(
+        PageInterface $page,
+        ChannelInterface $channel,
+        string $locale,
+        TemplateWrapper $contentTemplate,
+    ): ?SourceDocument {
         $translation = $page->getTranslation($locale);
         $slug = $translation->getSlug();
         $title = $translation->getTitle();
@@ -135,7 +144,8 @@ class CmsPagesDataSource implements ChatbotDataSourceInterface
         $content = $translation->getContent();
         $text = $title;
         if ($content !== null && $content !== '') {
-            $text = $title . "\n\n" . $this->htmlToText->convert($content);
+            $html = $contentTemplate->render(['content' => $content]);
+            $text = $title . "\n\n" . $this->htmlToText->convert($html);
         }
 
         $metadata = [
@@ -159,5 +169,10 @@ class CmsPagesDataSource implements ChatbotDataSourceInterface
             $metadata,
             $updatedAt->format(\DateTimeInterface::ATOM),
         );
+    }
+
+    private function getRichEditorContentTemplate(): TemplateWrapper
+    {
+        return $this->twig->createTemplate('{{ content|monsieurbiz_richeditor_render_field }}');
     }
 }

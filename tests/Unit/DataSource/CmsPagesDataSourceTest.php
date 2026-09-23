@@ -25,6 +25,14 @@ use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\RouterInterface;
+use MonsieurBiz\SyliusRichEditorPlugin\Twig\RichEditorExtension;
+use MonsieurBiz\SyliusRichEditorPlugin\UiElement\Metadata;
+use MonsieurBiz\SyliusRichEditorPlugin\UiElement\Registry;
+use MonsieurBiz\SyliusRichEditorPlugin\UiElement\UiElement;
+use Symfony\Bridge\Twig\AppVariable;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Twig\Environment;
+use Twig\Loader\FilesystemLoader;
 
 class CmsPagesDataSourceTest extends TestCase
 {
@@ -71,8 +79,52 @@ class CmsPagesDataSourceTest extends TestCase
             new CursorCodec(),
             $htmlToText ?? new HtmlToText(),
             new ChannelUrlGenerator($router),
+            $this->createRichEditorTwig(),
             $logger ?? new NullLogger(),
         );
+    }
+
+    private function createRichEditorTwig(): Environment
+    {
+        $loader = new FilesystemLoader();
+        $loader->addPath(
+            dirname(__DIR__, 3) . '/vendor/monsieurbiz/sylius-rich-editor-plugin/src/Resources/views',
+            'MonsieurBizSyliusRichEditorPlugin',
+        );
+        $twig = new Environment($loader, ['strict_variables' => true]);
+        $app = new AppVariable();
+        $app->setRequestStack(new RequestStack());
+        $twig->addGlobal('app', $app);
+
+        $registry = new Registry();
+        $registry->addUiElement($this->createUiElement('monsieurbiz.html', 'html.html.twig'));
+        $registry->addUiElement($this->createUiElement('broken.element', 'missing.html.twig'));
+
+        $twig->addExtension(new RichEditorExtension(
+            $registry,
+            $twig,
+            'monsieurbiz.html',
+            'content',
+            '/media/',
+            sys_get_temp_dir(),
+        ));
+
+        return $twig;
+    }
+
+    private function createUiElement(string $code, string $frontTemplate): UiElement
+    {
+        $uiElement = new UiElement();
+        $uiElement->setMetadata(Metadata::fromCodeAndConfiguration($code, [
+            'classes' => ['form' => 'unused'],
+            'templates' => [
+                'admin_render' => '@MonsieurBizSyliusRichEditorPlugin/admin/ui_element/html.html.twig',
+                'front_render' => '@MonsieurBizSyliusRichEditorPlugin/shop/ui_element/' . $frontTemplate,
+            ],
+            'enabled' => true,
+        ]));
+
+        return $uiElement;
     }
 
     private function createPage(
@@ -130,6 +182,46 @@ class CmsPagesDataSourceTest extends TestCase
         self::assertSame('About us', $document->title);
         self::assertStringContainsString('Hello', $document->text);
         self::assertNull($page->nextCursor);
+    }
+
+    public function testRichEditorContentIsIndexedAsItsRenderedText(): void
+    {
+        $router = $this->createStub(RouterInterface::class);
+        $router->method('generate')->willReturn('https://shop.example/sharpening');
+        $richEditorContent = json_encode([
+            ['code' => 'monsieurbiz.html', 'data' => ['content' => '<h2>Sharpening</h2><p>Send it blunt, get it sharp.</p>']],
+        ]);
+        $dataSource = $this->createDataSource(
+            [$this->createPage(3, 'sharpening', 'sharpening', 'Sharpening', $richEditorContent)],
+            $router,
+        );
+
+        $page = $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        $text = $page->documents[0]->text;
+        self::assertStringContainsString('Send it blunt, get it sharp.', $text);
+        self::assertStringNotContainsString('"code":', $text);
+    }
+
+    public function testARichEditorElementThatFailsToRenderSkipsOnlyItsPage(): void
+    {
+        $router = $this->createStub(RouterInterface::class);
+        $router->method('generate')->willReturn('https://shop.example/page');
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())
+            ->method('error')
+            ->with(self::isString(), self::callback(
+                fn (array $context): bool => $context['page'] === 'broken',
+            ));
+        $brokenContent = json_encode([['code' => 'broken.element', 'data' => ['content' => 'x']]]);
+        $brokenPage = $this->createPage(1, 'broken', 'broken-page', 'Broken page', $brokenContent);
+        $plainPage = $this->createPage(2, 'plain', 'plain-page', 'Plain page');
+        $dataSource = $this->createDataSource([$brokenPage, $plainPage], $router, null, $logger);
+
+        $page = $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        self::assertCount(1, $page->documents);
+        self::assertSame('plain', $page->documents[0]->id);
     }
 
     public function testTheUrlIsBuiltOnTheResolvedChannelsHostname(): void
