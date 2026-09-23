@@ -11,6 +11,7 @@ use Doctrine\ORM\QueryBuilder;
 use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
 use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
 use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ChannelTaxonRootsInterface;
 use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
 use FluffyDiscord\Honkers\Cursor\CursorCodec;
 use FluffyDiscord\Honkers\DTO\DocumentPage;
@@ -19,7 +20,6 @@ use FluffyDiscord\Honkers\DTO\SourceDocument;
 use FluffyDiscord\Honkers\DTO\SourceQuery;
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Enum\DocumentKind;
-use FluffyDiscord\SyliusHonkersBundle\Exception\AmbiguousChannelTaxonTreeException;
 use FluffyDiscord\Honkers\Text\HtmlToText;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
@@ -36,6 +36,7 @@ class CategoriesDataSource implements ChatbotDataSourceInterface
         private readonly ProductRepositoryInterface   $productRepository,
         private readonly ProductIndexabilityInterface $productIndexability,
         private readonly ChannelResolver              $channelResolver,
+        private readonly ChannelTaxonRootsInterface   $channelTaxonRoots,
         private readonly CursorCodec                  $cursorCodec,
         private readonly HtmlToText                   $htmlToText,
         private readonly ChannelUrlGenerator          $channelUrlGenerator,
@@ -73,7 +74,7 @@ class CategoriesDataSource implements ChatbotDataSourceInterface
             ->orderBy('taxon.id', Criteria::ASC);
 
         $taxonClassName = $repository->getClassName();
-        $ancestorBound = $this->restrictToChannelTree($queryBuilder, $repository, $channel);
+        $ancestorBound = $this->restrictToChannelTree($queryBuilder, $channel);
         $this->excludeDisabledBranches($queryBuilder, $taxonClassName, $ancestorBound);
 
         if ($isIdLookup) {
@@ -132,11 +133,8 @@ class CategoriesDataSource implements ChatbotDataSourceInterface
         return 'sylius_shop_product_index';
     }
 
-    private function restrictToChannelTree(
-        QueryBuilder $queryBuilder,
-        EntityRepository $repository,
-        ChannelInterface $channel,
-    ): string {
+    private function restrictToChannelTree(QueryBuilder $queryBuilder, ChannelInterface $channel): string
+    {
         $menuTaxon = $channel->getMenuTaxon();
         if ($menuTaxon instanceof TaxonInterface) {
             $queryBuilder
@@ -150,14 +148,9 @@ class CategoriesDataSource implements ChatbotDataSourceInterface
             return 'disabledAncestor.left > :treeLeft AND disabledAncestor.right <= :treeRight';
         }
 
-        $treeRoots = $this->findTreeRoots($repository);
-        $treeCount = count($treeRoots);
+        $treeRoots = $this->channelTaxonRoots->findIndexableRoots($channel);
 
-        if ($treeCount >= $this->getAmbiguityProbeSize()) {
-            throw new AmbiguousChannelTaxonTreeException($channel->getCode());
-        }
-
-        if ($treeCount === 0) {
+        if ($treeRoots === []) {
             $this->excludeEveryTaxon($queryBuilder);
 
             return 'disabledAncestor.parent IS NOT NULL';
@@ -165,8 +158,8 @@ class CategoriesDataSource implements ChatbotDataSourceInterface
 
         $queryBuilder
             ->andWhere('taxon.parent IS NOT NULL')
-            ->andWhere('taxon.root = :treeRoot')
-            ->setParameter('treeRoot', $treeRoots[0]);
+            ->andWhere('taxon.root IN (:treeRoots)')
+            ->setParameter('treeRoots', $treeRoots);
 
         return 'disabledAncestor.parent IS NOT NULL';
     }
@@ -176,22 +169,7 @@ class CategoriesDataSource implements ChatbotDataSourceInterface
         $queryBuilder->andWhere('taxon.id IS NULL');
     }
 
-    /**
-     * @return list<TaxonInterface>
-     */
-    private function findTreeRoots(EntityRepository $repository): array
-    {
-        return $repository->createQueryBuilder('taxon')
-            ->andWhere('taxon.parent IS NULL')
-            ->setMaxResults($this->getAmbiguityProbeSize())
-            ->getQuery()
-            ->getResult();
-    }
 
-    private function getAmbiguityProbeSize(): int
-    {
-        return 2;
-    }
 
     private function excludeDisabledBranches(
         QueryBuilder $queryBuilder,
