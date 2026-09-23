@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `ChannelResolver::getEnabledChannels()` — every enabled channel of the shop.
+- `SyliusLocaleContext::getAllChannelLocales()` — the locales of all enabled channels, de-duplicated. Implements the
+  new `ChatbotLocaleContextInterface` method and needs `fluffydiscord/honkers-sdk ^1.1`.
+
+### Changed
+
+- `GET /chatbot/v1/sources` advertises the locales of **every** enabled channel instead of only those of the channel
+  the request host resolved to. The source list carries no channel, so a backend driving several channels through one
+  host learned only the host channel's locales and never ingested the rest. Reads are unaffected:
+  `GET /chatbot/v1/sources/{name}` still applies `?channel=` and validates the locale against that channel.
+
 ## v1.3.1 - 2026-09-16
 
 ### Changed
