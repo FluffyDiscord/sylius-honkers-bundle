@@ -159,7 +159,7 @@ class ProductsDataSourceTest extends TestCase
         self::assertSame('T-SHIRT-01', $document->metadata['productCode']);
     }
 
-    public function testMetadataTaxonsAreCodesAndNamesStayInTheText(): void
+    public function testMetadataCarriesTaxonCodesAndNamesAndTheNamesStayInTheText(): void
     {
         $dataSource = $this->createDataSource([$this->createVariant()]);
 
@@ -169,6 +169,7 @@ class ProductsDataSourceTest extends TestCase
         $document = $page->documents[0];
         self::assertSame(DocumentKind::Product, $document->kind);
         self::assertSame(['CLOTHING', 'T_SHIRTS'], $document->metadata['taxons']);
+        self::assertSame(['Clothing', 'T-Shirts'], $document->metadata['taxonNames']);
         self::assertStringContainsString('Clothing, T-Shirts', $document->text);
         self::assertStringContainsString('Clothing', $document->text);
     }

@@ -149,8 +149,9 @@ Add your own tool → [Symfony bundle README](https://github.com/FluffyDiscord/s
 The backend pulls these in bulk and ingests them into its retrieval index:
 
 - `products` — indexable channel products per locale with `ProductMetadata` (`code, name, url,
-  imageUrl, priceMinor, currency, inStock, taxons, attributes`); `taxons` carries taxon **codes**, the
-  taxon names and main taxon path live in the document text.
+  imageUrl, priceMinor, currency, inStock, taxons, taxonNames, attributes`); `taxons` carries taxon **codes**,
+  `taxonNames` their names in the requested locale (the backend builds each product's search card from them); the
+  names and main taxon path also live in the document text.
 - `categories` — enabled taxons of the channel tree per locale (`code, name, path, url, productCount`).
   - Tree = the channel's **menu taxon** subtree. A taxon is served only when every ancestor *below* the
     tree top is enabled, so a disabled branch never leaks its children.

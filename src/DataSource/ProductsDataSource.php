@@ -153,6 +153,7 @@ class ProductsDataSource implements ChatbotDataSourceInterface
             'currency' => $item->currency,
             'inStock' => $item->inStock,
             'taxons' => $this->collectTaxonCodes($product),
+            'taxonNames' => $taxonNames,
             'attributes' => $attributes,
             'options' => $optionValues,
         ];

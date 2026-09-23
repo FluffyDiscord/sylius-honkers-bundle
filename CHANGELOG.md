@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.0 - 2026-09-23
+
+### Added
+
+- Product metadata carries `taxonNames`: the product's taxon names in the requested locale, alongside the existing
+  `taxons` codes. The chatbot builds a short search card per product from the title, these names and short
+  attributes. Additive; a backend that ignores the key is unaffected. The changed metadata makes the next catalog
+  sync rewrite every product once.
+
 ## v1.2.2 - 2026-09-23
 
 ### Changed
