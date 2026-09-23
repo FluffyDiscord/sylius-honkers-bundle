@@ -17,6 +17,9 @@ use FluffyDiscord\SyliusHonkersBundle\DataSource\CategoriesDataSource;
 use FluffyDiscord\Honkers\DTO\SourceQuery;
 use FluffyDiscord\Honkers\Enum\DocumentKind;
 use FluffyDiscord\SyliusHonkersBundle\Exception\AmbiguousChannelTaxonTreeException;
+use FluffyDiscord\SyliusHonkersBundle\Contract\ChannelTaxonRootsInterface;
+use FluffyDiscord\SyliusHonkersBundle\Taxon\ChannelTaxonRoots;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\SharedTaxonRoots;
 use FluffyDiscord\Honkers\Text\HtmlToText;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -47,6 +50,7 @@ class CategoriesDataSourceTest extends TestCase
         ?\Closure $isIndexable = null,
         ?array $treeRoots = null,
         ?string $channelHostname = 'shop.example',
+        ?ChannelTaxonRootsInterface $channelTaxonRoots = null,
     ): CategoriesDataSource {
         $taxonEntityManager = $this->createEntityManager(
             $taxons,
@@ -88,6 +92,7 @@ class CategoriesDataSourceTest extends TestCase
             $productRepository,
             $productIndexability,
             $channelResolver,
+            $channelTaxonRoots ?? new ChannelTaxonRoots($taxonRepository),
             new CursorCodec(),
             new HtmlToText(),
             new ChannelUrlGenerator($router),
@@ -372,7 +377,22 @@ class CategoriesDataSourceTest extends TestCase
 
         $taxonDql = $this->getTaxonDql();
         self::assertStringContainsString('taxon.parent IS NOT NULL', $taxonDql);
-        self::assertStringContainsString('taxon.root = :treeRoot', $taxonDql);
+        self::assertStringContainsString('taxon.root IN (:treeRoots)', $taxonDql);
+    }
+
+    public function testAResolverThatOwnsSeveralTreesIndexesThemAllInsteadOfRefusing(): void
+    {
+        $roots = [
+            $this->createTaxon(1, 'ROOT', 'Root', 'root'),
+            $this->createTaxon(2, 'SECOND', 'Second', 'second'),
+        ];
+        $dataSource = $this->createDataSource([], [], null, null, $roots, 'shop.example', new SharedTaxonRoots($roots));
+
+        $dataSource->getDocuments(new SourceQuery('cs_CZ'));
+
+        $taxonDql = $this->getTaxonDql();
+        self::assertStringContainsString('taxon.parent IS NOT NULL', $taxonDql);
+        self::assertStringContainsString('taxon.root IN (:treeRoots)', $taxonDql);
     }
 
     public function testWithoutAMenuTaxonASecondTaxonTreeIsRefusedInsteadOfServed(): void
