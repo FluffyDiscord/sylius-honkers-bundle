@@ -11,7 +11,7 @@
         "doctrine/collections": "^1.8 || ^2.1",
         "doctrine/doctrine-bundle": "^2.13 || ^3.2 || ^4.0",
         "doctrine/orm": "^2.20 || ^3.6 || ^4.0",
-        "fluffydiscord/honkers-sdk": "^1.1",
+        "fluffydiscord/honkers-sdk": "^1.1.1",
         "fluffydiscord/symfony-honkers-bundle": "^1.1",
         "liip/imagine-bundle": "^2.13",
         "sylius/sylius": "^1.14 || ^2.2 || ^2.3@alpha",

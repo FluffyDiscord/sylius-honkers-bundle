@@ -44,11 +44,10 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
             return;
         }
 
-        $backendUrl = (string) $honkersConfig['backend_url'];
         $widgetContext = [
-            'backend_url' => $backendUrl,
+            'backend_url' => (string) $honkersConfig['backend_url'],
             'site_key' => (string) $honkersConfig['widget']['site_key'],
-            'widget_cdn_url' => $this->resolveWidgetCdnUrl($honkersConfig, $backendUrl),
+            'widget_cdn_url' => (string) $honkersConfig['widget']['cdn_url'],
         ];
 
         $hasTwigHooks = $container->hasExtension('sylius_twig_hooks');
@@ -148,19 +147,6 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
     private function getHonkersConfigAlias(): string
     {
         return 'fluffy_discord_honkers';
-    }
-
-    /**
-     * @param array<string, mixed> $config
-     */
-    private function resolveWidgetCdnUrl(array $config, string $backendUrl): string
-    {
-        $cdnUrl = (string) ($config['widget']['cdn_url'] ?? '');
-        if ($cdnUrl !== '') {
-            return $cdnUrl;
-        }
-
-        return $backendUrl . '/widget/v1/chat.js';
     }
 
     /**

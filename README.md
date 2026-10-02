@@ -90,10 +90,9 @@ CHATBOT_SITE_KEY=site-key
   notifier. **Outside `dev`, a non-`https` `backend_url` is refused and nothing is sent.**
 - `ingest_secret` — the shop half of the catalog credential; the backend receives
   `Authorization: Bearer <site_key>.<ingest_secret>`.
-- `widget.cdn_url` — where `<script src>` loads `chat.js` from. Set it to the Bunny CDN URL the backend
-  publishes to via `chatbot:widget:deploy` (must equal the backend's `BUNNY_CDN_PURGE_URL`). Only the
-  script bytes move to the CDN; every API call still goes to `backend_url`. Empty → falls back to
-  `{backend_url}/widget/v1/chat.js`.
+- `widget.cdn_url` — where `<script src>` loads `chat.js` from. Empty → the honkers.dev CDN,
+  `https://honkers.b-cdn.net/widget/v1/chat.js`. Only the script bytes come from the CDN; every API
+  call still goes to `backend_url`.
 - `widget.enabled` — must be a literal boolean; the widget hook is registered at build time.
 
 #### One site per channel
@@ -261,5 +260,5 @@ Include the template directly with a plain context — the channel key still app
 } only %}
 ```
 
-`widget_cdn_url` defaults to `{backend_url}/widget/v1/chat.js` when `widget.cdn_url` is unset. The
+`widget_cdn_url` defaults to `https://honkers.b-cdn.net/widget/v1/chat.js` when `widget.cdn_url` is unset. The
 widget talks only to `backend_url`; it never calls `/chatbot/v1` itself.

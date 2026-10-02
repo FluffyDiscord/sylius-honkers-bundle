@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Template;
 
+use FluffyDiscord\Honkers\Widget\WidgetSnippet;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\AppVariableDouble;
 use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
@@ -162,6 +163,6 @@ class WidgetTemplateTest extends TestCase
             $channelSiteKeys,
         );
 
-        return new ChatbotWidgetRuntime($channelContext, $siteKeyResolver);
+        return new ChatbotWidgetRuntime($channelContext, $siteKeyResolver, new WidgetSnippet());
     }
 }

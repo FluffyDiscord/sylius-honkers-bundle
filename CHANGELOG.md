@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.1 - 2026-10-02
+
+### Fixed
+
+- An unset `widget.cdn_url` loads `chat.js` from the honkers.dev CDN
+  (`https://honkers.b-cdn.net/widget/v1/chat.js`) instead of `{backend_url}/widget/v1/chat.js`. The shop widget
+  markup is now rendered by `fluffydiscord/honkers-sdk`'s `WidgetSnippet`, so it follows the SDK's default.
+
 ## v1.3.0 - 2026-09-23
 
 ### Added

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit;
 
 use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
+use FluffyDiscord\Honkers\Widget\WidgetSnippet;
 use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\FluffyDiscordSyliusHonkersBundle;
@@ -222,6 +223,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
     {
         return [
             CatalogIngestClient::class => CatalogIngestClient::class,
+            WidgetSnippet::class => WidgetSnippet::class,
             LoggerInterface::class => LoggerInterface::class,
             ChannelRepositoryInterface::class => ChannelRepositoryInterface::class,
             ChannelContextInterface::class => ChannelContextInterface::class,
@@ -264,7 +266,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         return [
             'backend_url' => 'https://backend.test',
             'site_key' => 'site-key',
-            'widget_cdn_url' => 'https://backend.test/widget/v1/chat.js',
+            'widget_cdn_url' => '',
         ];
     }
 

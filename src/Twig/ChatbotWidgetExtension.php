@@ -16,6 +16,11 @@ class ChatbotWidgetExtension extends AbstractExtension
     {
         return [
             new TwigFunction('fluffydiscord_chatbot_site_key', [ChatbotWidgetRuntime::class, 'getSiteKey']),
+            new TwigFunction(
+                'fluffydiscord_chatbot_widget_markup',
+                [ChatbotWidgetRuntime::class, 'renderWidgetMarkup'],
+                ['is_safe' => ['html']],
+            ),
         ];
     }
 }

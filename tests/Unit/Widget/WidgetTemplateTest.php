@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Widget;
 
+use FluffyDiscord\Honkers\Widget\WidgetSnippet;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetExtension;
 use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetRuntime;
@@ -17,11 +18,11 @@ use Twig\RuntimeLoader\FactoryRuntimeLoader;
 
 class WidgetTemplateTest extends TestCase
 {
-    public function testFallsBackToBackendServedScriptWhenCdnUrlIsEmpty(): void
+    public function testFallsBackToTheHonkersCdnWhenCdnUrlIsEmpty(): void
     {
         $html = $this->renderWidget('');
 
-        self::assertStringContainsString('src="https://chat.example.com/widget/v1/chat.js"', $html);
+        self::assertStringContainsString('src="https://honkers.b-cdn.net/widget/v1/chat.js"', $html);
     }
 
     public function testUsesCdnUrlWhenConfigured(): void
@@ -47,7 +48,7 @@ class WidgetTemplateTest extends TestCase
         $channelContext = $this->createStub(ChannelContextInterface::class);
         $channelContext->method('getChannel')->willThrowException(new ChannelNotFoundException());
         $siteKeyResolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), 'pk_test', []);
-        $runtime = new ChatbotWidgetRuntime($channelContext, $siteKeyResolver);
+        $runtime = new ChatbotWidgetRuntime($channelContext, $siteKeyResolver, new WidgetSnippet());
         $twig->addRuntimeLoader(new FactoryRuntimeLoader([
             ChatbotWidgetRuntime::class => fn (): ChatbotWidgetRuntime => $runtime,
         ]));
