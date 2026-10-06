@@ -1,0 +1,210 @@
+<?php
+
+declare(strict_types=1);
+
+namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\EventListener;
+
+use Doctrine\Common\Collections\ArrayCollection;
+use FluffyDiscord\Honkers\DTO\ChatOrder;
+use FluffyDiscord\Honkers\Exception\TelemetryException;
+use FluffyDiscord\Honkers\Telemetry\TelemetryClient;
+use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
+use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatClickSession;
+use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersBundle\EventListener\ChatOrderAttributionListener;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingLogger;
+use PHPUnit\Framework\TestCase;
+use Psr\Log\LogLevel;
+use Sylius\Bundle\ResourceBundle\Event\ResourceControllerEvent;
+use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
+use Sylius\Component\Core\Model\Channel;
+use Sylius\Component\Core\Model\OrderInterface;
+use Sylius\Component\Core\Model\OrderItemInterface;
+use Sylius\Component\Core\Model\Product;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
+
+class ChatOrderAttributionListenerTest extends TestCase
+{
+    /** @var list<array{siteKey: string, order: ChatOrder}> */
+    private array $reports = [];
+
+    private ChatClickSession $chatClickSession;
+
+    private RecordingLogger $logger;
+
+    protected function setUp(): void
+    {
+        $request = Request::create('https://shop.example/checkout/complete');
+        $request->setSession(new Session(new MockArraySessionStorage()));
+
+        $requestStack = new RequestStack();
+        $requestStack->push($request);
+
+        $this->chatClickSession = new ChatClickSession($requestStack);
+        $this->logger = new RecordingLogger();
+    }
+
+    private function createListener(?TelemetryClient $telemetryClient = null): ChatOrderAttributionListener
+    {
+        $siteKeyResolver = new SiteKeyResolver(
+            $this->createStub(ChannelRepositoryInterface::class),
+            'default-key',
+            ['CZ_WEB' => 'cz-key'],
+        );
+
+        return new ChatOrderAttributionListener(
+            $this->chatClickSession,
+            $telemetryClient ?? $this->createRecordingTelemetryClient(),
+            $siteKeyResolver,
+            new BackendReportGuard($this->logger, 'https://backend.example', 'ingest-secret', 'prod'),
+            $this->logger,
+        );
+    }
+
+    private function createRecordingTelemetryClient(): TelemetryClient
+    {
+        $telemetryClient = $this->createStub(TelemetryClient::class);
+        $telemetryClient->method('reportOrder')->willReturnCallback(function (string $siteKey, ChatOrder $order): void {
+            $this->reports[] = ['siteKey' => $siteKey, 'order' => $order];
+        });
+
+        return $telemetryClient;
+    }
+
+    /**
+     * @param array<string, int> $totalsByProductCode
+     */
+    private function createCompletedOrderEvent(array $totalsByProductCode, string $currency = 'CZK', string $channelCode = 'CZ_WEB'): ResourceControllerEvent
+    {
+        $items = [];
+        foreach ($totalsByProductCode as $productCode => $total) {
+            $items[] = $this->createOrderItem((string) $productCode, $total);
+        }
+
+        $channel = new Channel();
+        $channel->setCode($channelCode);
+
+        $order = $this->createStub(OrderInterface::class);
+        $order->method('getItems')->willReturn(new ArrayCollection($items));
+        $order->method('getNumber')->willReturn('000042');
+        $order->method('getCurrencyCode')->willReturn($currency);
+        $order->method('getChannel')->willReturn($channel);
+
+        return new ResourceControllerEvent($order);
+    }
+
+    private function createOrderItem(string $productCode, int $total): OrderItemInterface
+    {
+        $product = new Product();
+        $product->setCode($productCode);
+
+        $item = $this->createStub(OrderItemInterface::class);
+        $item->method('getProduct')->willReturn($product);
+        $item->method('getTotal')->willReturn($total);
+
+        return $item;
+    }
+
+    public function testOnlyTheMatchingItemTotalIsReportedOnTerminate(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 129900, 'BLADE' => 45000]));
+        self::assertSame([], $this->reports);
+        $listener->reportOrders();
+
+        self::assertCount(1, $this->reports);
+        self::assertSame('cz-key', $this->reports[0]['siteKey']);
+        self::assertEquals(new ChatOrder('click-1', '000042', 129900, 'CZK'), $this->reports[0]['order']);
+    }
+
+    public function testAZeroDecimalCurrencyIsConvertedToMinorUnits(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 50000], 'JPY'));
+        $listener->reportOrders();
+
+        self::assertEquals(new ChatOrder('click-1', '000042', 500, 'JPY'), $this->reports[0]['order']);
+    }
+
+    public function testEveryClickIsReportedSeparately(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+        $this->chatClickSession->remember('BLADE', 'click-2');
+        $this->chatClickSession->remember('OIL', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 100000, 'BLADE' => 45000, 'OIL' => 9900]));
+        $listener->reportOrders();
+
+        $reportedOrders = array_column($this->reports, 'order');
+        self::assertEquals([
+            new ChatOrder('click-1', '000042', 109900, 'CZK'),
+            new ChatOrder('click-2', '000042', 45000, 'CZK'),
+        ], $reportedOrders);
+    }
+
+    public function testAnOrderWithoutAChatProductReportsNothing(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['BLADE' => 45000]));
+        $listener->reportOrders();
+
+        self::assertSame([], $this->reports);
+    }
+
+    public function testAnyCompletedOrderResetsTheAttribution(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['BLADE' => 45000]));
+
+        self::assertSame([], $this->chatClickSession->getClickIdsByProductCode());
+    }
+
+    public function testTheOrderChannelSiteKeyIsUsed(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 129900], 'EUR', 'DE_WEB'));
+        $listener->reportOrders();
+
+        self::assertSame('default-key', $this->reports[0]['siteKey']);
+    }
+
+    public function testATelemetryFailureIsLoggedAndSwallowed(): void
+    {
+        $telemetryClient = $this->createStub(TelemetryClient::class);
+        $telemetryClient->method('reportOrder')->willThrowException(new TelemetryException('Backend down.', 503));
+        $listener = $this->createListener($telemetryClient);
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 129900]));
+        $listener->reportOrders();
+
+        self::assertSame(LogLevel::WARNING, $this->logger->records[0]['level']);
+        self::assertSame('000042', $this->logger->records[0]['context']['orderNumber']);
+    }
+
+    public function testQueuedOrdersAreSentOnlyOnce(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 129900]));
+        $listener->reportOrders();
+        $listener->reportOrders();
+
+        self::assertCount(1, $this->reports);
+    }
+}

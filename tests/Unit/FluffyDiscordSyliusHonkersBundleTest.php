@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit;
 
+use FluffyDiscord\Honkers\Contract\ChatbotLocaleContextInterface;
 use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
 use FluffyDiscord\Honkers\Widget\WidgetSnippet;
+use FluffyDiscord\HonkersBundle\Contract\SiteKeyContextInterface;
+use FluffyDiscord\HonkersBundle\FluffyDiscordHonkersBundle;
+use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
 use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\FluffyDiscordSyliusHonkersBundle;
 use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersBundle\Locale\SyliusLocaleContext;
+use FluffyDiscord\SyliusHonkersBundle\Site\ChannelSiteKeyContext;
 use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\NamedExtension;
 use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetExtension;
 use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetRuntime;
@@ -24,6 +30,7 @@ use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
+use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Twig\Extension\ExtensionInterface;
 use Twig\Extension\RuntimeExtensionInterface;
 
@@ -140,6 +147,37 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         self::assertSame(['CZ_WEB' => 'cz-key'], $container->getParameter('fluffydiscord_sylius_honkers.channel_site_keys'));
     }
 
+    /**
+     * @param list<class-string<AbstractBundle>> $bundleClasses
+     */
+    #[DataProvider('provideBundleOrders')]
+    public function testTheChannelContextsWinWhicheverBundleIsRegisteredFirst(array $bundleClasses): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('kernel.environment', 'test');
+        $container->setParameter('kernel.build_dir', sys_get_temp_dir());
+        $this->registerBundles($container, $bundleClasses);
+        $container->loadFromExtension('fluffy_discord_honkers', ['api_secret' => 'api-secret']);
+        $container->loadFromExtension('fluffy_discord_sylius_honkers', []);
+        $this->skipPassesAfterAliasing($container);
+
+        $container->compile();
+
+        $siteKeyContextAlias = (string) $container->getAlias(SiteKeyContextInterface::class);
+        $localeContextAlias = (string) $container->getAlias(ChatbotLocaleContextInterface::class);
+        self::assertSame(ChannelSiteKeyContext::class, $siteKeyContextAlias);
+        self::assertSame(SyliusLocaleContext::class, $localeContextAlias);
+    }
+
+    /**
+     * @return iterable<string, array{list<class-string<AbstractBundle>>}>
+     */
+    public static function provideBundleOrders(): iterable
+    {
+        yield 'Symfony bundle first' => [[FluffyDiscordHonkersBundle::class, FluffyDiscordSyliusHonkersBundle::class]];
+        yield 'Sylius bundle first' => [[FluffyDiscordSyliusHonkersBundle::class, FluffyDiscordHonkersBundle::class]];
+    }
+
     public function testTheSiteKeyServicesWireInACompiledContainer(): void
     {
         $container = new ContainerBuilder();
@@ -178,6 +216,26 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         self::assertInstanceOf(ChatbotWidgetRuntime::class, $container->get(ChatbotWidgetRuntime::class));
         self::assertTrue($container->getDefinition(ChatbotWidgetExtension::class)->hasTag('twig.extension'));
         self::assertTrue($container->getDefinition(ChatbotWidgetRuntime::class)->hasTag('twig.runtime'));
+    }
+
+    /**
+     * @param list<class-string<AbstractBundle>> $bundleClasses
+     */
+    private function registerBundles(ContainerBuilder $container, array $bundleClasses): void
+    {
+        foreach ($bundleClasses as $bundleClass) {
+            $bundle = new $bundleClass();
+            $container->registerExtension($bundle->getContainerExtension());
+            $bundle->build($container);
+        }
+    }
+
+    private function skipPassesAfterAliasing(ContainerBuilder $container): void
+    {
+        $passConfig = $container->getCompilerPassConfig();
+        $passConfig->setOptimizationPasses([]);
+        $passConfig->setRemovingPasses([]);
+        $passConfig->setAfterRemovingPasses([]);
     }
 
     /**
@@ -223,6 +281,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
     {
         return [
             CatalogIngestClient::class => CatalogIngestClient::class,
+            BackendReportGuard::class => BackendReportGuard::class,
             WidgetSnippet::class => WidgetSnippet::class,
             LoggerInterface::class => LoggerInterface::class,
             ChannelRepositoryInterface::class => ChannelRepositoryInterface::class,

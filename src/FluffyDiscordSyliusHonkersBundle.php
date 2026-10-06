@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FluffyDiscord\SyliusHonkersBundle;
 
 use FluffyDiscord\SyliusHonkersBundle\DataSource\CmsPagesDataSource;
+use FluffyDiscord\SyliusHonkersBundle\DependencyInjection\Compiler\SyliusContextAliasPass;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\Page;
 use Sylius\Bundle\UiBundle\Registry\TemplateBlock;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -16,6 +17,12 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
 class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
 {
+    public function build(ContainerBuilder $container): void
+    {
+        parent::build($container);
+        $container->addCompilerPass(new SyliusContextAliasPass());
+    }
+
     public function configure(DefinitionConfigurator $definition): void
     {
         $definition->rootNode()

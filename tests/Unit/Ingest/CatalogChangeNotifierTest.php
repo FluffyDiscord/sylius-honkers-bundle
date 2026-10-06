@@ -6,6 +6,7 @@ namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Ingest;
 
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
+use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
 use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
@@ -57,9 +58,7 @@ class CatalogChangeNotifierTest extends TestCase
             $ingestClient,
             $this->logger,
             new SiteKeyResolver($channelRepository ?? $this->createChannelRepository($channelDefinitions), $defaultSiteKey, $channelSiteKeys),
-            $backendUrl,
-            'ingest-secret',
-            $environment,
+            new BackendReportGuard($this->logger, $backendUrl, 'ingest-secret', $environment),
         );
     }
 

@@ -7,6 +7,7 @@ namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
 use FluffyDiscord\Honkers\DTO\CatalogChangeResult;
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
+use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
 use Nyholm\Psr7\Factory\Psr17Factory;
@@ -29,8 +30,9 @@ class RecordingCatalogChangeNotifier extends CatalogChangeNotifier
         $psr18Client = new Psr18Client(new MockHttpClient());
         $factory = new Psr17Factory();
         $ingestClient = new CatalogIngestClient($psr18Client, $factory, $factory, 'https://backend.test', 'secret');
+        $backendReportGuard = new BackendReportGuard(new NullLogger(), 'https://backend.test', 'secret', 'test');
 
-        parent::__construct($ingestClient, new NullLogger(), $siteKeyResolver, 'https://backend.test', 'secret', 'test');
+        parent::__construct($ingestClient, new NullLogger(), $siteKeyResolver, $backendReportGuard);
     }
 
     public function collect(CatalogSourceName $source, string $locale, string $externalId): void

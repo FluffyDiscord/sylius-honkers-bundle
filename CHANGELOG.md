@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.4.0 - 2026-10-06
+
+### Added
+
+- Chat click tracking. A visitor who lands on a product page through a chat link (`?gooseclid=`) is remembered in
+  the session; when an order with that product is placed, the bundle reports the order number and the total of
+  those items to the chatbot. Any placed order clears the remembered clicks. Shop checkout only, not API checkout.
+- The landing visit itself is reported server-side through `fluffydiscord/symfony-honkers-bundle` v1.2, with the
+  site key of the current channel.
+
+### Changed
+
+- Requires `fluffydiscord/honkers-sdk` ^1.2 and `fluffydiscord/symfony-honkers-bundle` ^1.2; declares `symfony/intl`.
+- The catalog change notifier no longer logs a warning when `backend_url` or `ingest_secret` is empty; it skips
+  silently. A non-https backend outside `dev` is still refused with a warning.
+- The site-key and locale contexts are aliased by a compiler pass, so they win whichever order the bundles are
+  registered in.
+
 ## v1.3.1 - 2026-10-02
 
 ### Fixed

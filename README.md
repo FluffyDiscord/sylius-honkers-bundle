@@ -262,3 +262,23 @@ Include the template directly with a plain context — the channel key still app
 
 `widget_cdn_url` defaults to `https://honkers.b-cdn.net/widget/v1/chat.js` when `widget.cdn_url` is unset. The
 widget talks only to `backend_url`; it never calls `/chatbot/v1` itself.
+
+## Chat click tracking
+
+**Visits and orders from chat links are reported for you.** No setup beyond `backend_url`, `ingest_secret`
+and a site key.
+
+- **Visit** → the Symfony bundle's [landing beacon](https://github.com/FluffyDiscord/symfony-honkers-bundle#chat-click-tracking)
+  reports it, with the current channel's site key.
+- **Product page opened from a chat link** (`?gooseclid=…`) → the product is remembered in the session.
+  Last click per product wins, at most 20 products.
+- **Order placed with a remembered product** → reported after the response is sent: revenue of the matching
+  items (incl. tax and item discounts, excl. shipping), the order's currency, the order channel's site key.
+  Unpaid orders count — it's reported when placed.
+- **Any placed order resets the session**, with or without a chat product.
+
+> Only shop checkout is covered (`sylius.order.post_complete`). Orders completed through the API or your
+> own code aren't reported.
+
+Backend unreachable → logged warning; checkout is never affected. Non-https `backend_url` → skipped outside
+the `dev` env.

@@ -9,11 +9,11 @@ use FluffyDiscord\Honkers\DTO\CatalogChangeResult;
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Exception\CatalogIngestException;
 use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
+use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\DTO\SiteKeyRouting;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\ConsoleEvents;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Contracts\Service\ResetInterface;
@@ -29,15 +29,7 @@ class CatalogChangeNotifier implements ResetInterface
         private readonly CatalogIngestClient $catalogIngestClient,
         private readonly LoggerInterface     $logger,
         private readonly SiteKeyResolver     $siteKeyResolver,
-
-        #[Autowire(param: 'fluffydiscord_honkers.backend_url')]
-        private readonly string $backendUrl,
-
-        #[Autowire(param: 'fluffydiscord_honkers.ingest_secret')]
-        private readonly string $ingestSecret,
-
-        #[Autowire(param: 'kernel.environment')]
-        private readonly string $environment,
+        private readonly BackendReportGuard  $backendReportGuard,
     ) {
     }
 
@@ -56,13 +48,7 @@ class CatalogChangeNotifier implements ResetInterface
      */
     public function getMissingConfigurationKeys(): array
     {
-        $missingKeys = [];
-        if ($this->backendUrl === '') {
-            $missingKeys[] = 'backend_url';
-        }
-        if ($this->ingestSecret === '') {
-            $missingKeys[] = 'ingest_secret';
-        }
+        $missingKeys = $this->backendReportGuard->getMissingBackendConfigurationKeys();
         $hasAnySiteKey = $this->siteKeyResolver->hasAnySiteKey();
         if (!$hasAnySiteKey) {
             $missingKeys[] = 'widget.site_key or channel_site_keys';
@@ -105,8 +91,8 @@ class CatalogChangeNotifier implements ResetInterface
             return;
         }
 
-        $canNotify = $this->canNotify();
-        if (!$canNotify) {
+        $isConfigured = $this->isConfigured();
+        if (!$isConfigured) {
             return;
         }
 
@@ -135,8 +121,8 @@ class CatalogChangeNotifier implements ResetInterface
             return new CatalogChangeResult(true);
         }
 
-        $canNotify = $this->canNotify();
-        if (!$canNotify) {
+        $isConfigured = $this->isConfigured();
+        if (!$isConfigured) {
             return new CatalogChangeResult(false);
         }
 
@@ -144,6 +130,11 @@ class CatalogChangeNotifier implements ResetInterface
         if ($siteKey === '') {
             $this->logMissingSiteKey($channelCode);
 
+            return new CatalogChangeResult(false);
+        }
+
+        $canReport = $this->canReport($siteKey);
+        if (!$canReport) {
             return new CatalogChangeResult(false);
         }
 
@@ -181,6 +172,11 @@ class CatalogChangeNotifier implements ResetInterface
             $externalIds = array_keys($change['externalIds']);
             $batches = array_chunk($externalIds, $maxExternalIds);
             foreach ($siteKeyRouting->getSiteKeys($change['locale']) as $siteKey) {
+                $canReport = $this->canReport($siteKey);
+                if (!$canReport) {
+                    continue;
+                }
+
                 foreach ($batches as $batch) {
                     $this->sendToSite($change['source'], $change['locale'], $batch, $siteKey);
                 }
@@ -282,38 +278,15 @@ class CatalogChangeNotifier implements ResetInterface
         ]);
     }
 
-    private function canNotify(): bool
+    private function isConfigured(): bool
     {
         $missingKeys = $this->getMissingConfigurationKeys();
-        if ($missingKeys !== []) {
-            $this->logger->warning('Chatbot: the catalog change notifier is not configured, skipping the notification.', [
-                'missingConfigurationKeys' => $missingKeys,
-            ]);
 
-            return false;
-        }
-
-        $isAllowedBackendUrl = $this->isAllowedBackendUrl();
-        if (!$isAllowedBackendUrl) {
-            $this->logger->warning('Chatbot: refusing to notify a non-https backend URL.', [
-                'backendUrl' => $this->backendUrl,
-                'environment' => $this->environment,
-            ]);
-
-            return false;
-        }
-
-        return true;
+        return $missingKeys === [];
     }
 
-    private function isAllowedBackendUrl(): bool
+    private function canReport(string $siteKey): bool
     {
-        $scheme = parse_url($this->backendUrl, PHP_URL_SCHEME);
-        $isSecure = $scheme === 'https';
-        if ($isSecure) {
-            return true;
-        }
-
-        return $this->environment === 'dev';
+        return $this->backendReportGuard->canReport($siteKey, 'catalog change');
     }
 }
