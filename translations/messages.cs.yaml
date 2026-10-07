@@ -28,3 +28,7 @@ fluffydiscord_honkers:
     attribute_value:
         'yes': 'ano'
         'no': 'ne'
+    admin:
+        order:
+            from_chat: 'Z chatbota'
+            open_conversation: 'Otevřít konverzaci'

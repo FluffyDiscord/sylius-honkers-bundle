@@ -28,3 +28,7 @@ fluffydiscord_honkers:
     attribute_value:
         'yes': 'yes'
         'no': 'no'
+    admin:
+        order:
+            from_chat: 'From chatbot'
+            open_conversation: 'Open conversation'

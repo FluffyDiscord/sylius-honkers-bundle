@@ -68,12 +68,39 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
 
     public function testADisabledWidgetIsRegisteredNowhere(): void
     {
-        $container = $this->createContainer(['sylius_ui'], ['enabled' => false]);
+        $container = $this->createContainer(['sylius_ui', 'sylius_twig_hooks'], ['enabled' => false]);
 
         $this->prependExtension($container);
 
-        self::assertSame([], $container->getExtensionConfig('sylius_ui'));
-        self::assertSame([], $container->getExtensionConfig('sylius_twig_hooks'));
+        $hooks = $container->getExtensionConfig('sylius_twig_hooks');
+        self::assertCount(1, $hooks);
+        self::assertArrayNotHasKey('sylius_shop.base#javascripts', $hooks[0]['hooks']);
+    }
+
+    public function testTheFromChatFieldIsRegisteredAsAnAdminTwigHook(): void
+    {
+        $container = $this->createContainer(['sylius_twig_hooks', 'sylius_ui']);
+
+        $this->prependExtension($container);
+
+        $hooks = $container->getExtensionConfig('sylius_twig_hooks');
+        $fromChat = $hooks[1]['hooks']['sylius_admin.order.show.content.sections#right']['fluffydiscord_chatbot_from_chat'];
+
+        self::assertSame('@FluffyDiscordSyliusHonkers/admin/order/show/from_chat.html.twig', $fromChat['template']);
+    }
+
+    public function testTheFromChatFieldIsRegisteredAsAnAdminTemplateBlockOnSyliusWithoutTwigHooks(): void
+    {
+        require_once __DIR__ . '/Fixtures/sylius_1_template_block.php';
+
+        $container = $this->createContainer(['sylius_ui']);
+
+        $this->prependExtension($container);
+
+        $events = $container->getExtensionConfig('sylius_ui');
+        $fromChat = $events[1]['events']['sylius.admin.order.show.sidebar']['blocks']['fluffydiscord_chatbot_from_chat'];
+
+        self::assertSame('@FluffyDiscordSyliusHonkers/admin/order/from_chat.html.twig', $fromChat['template']);
     }
 
     public function testTheChannelSiteKeysDefaultToNone(): void

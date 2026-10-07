@@ -282,3 +282,39 @@ and a site key.
 
 Backend unreachable → logged warning; checkout is never affected. Non-https `backend_url` → skipped outside
 the `dev` env.
+
+## Orders from chat
+
+**Open the chat conversation behind an order from its admin page.** Add the interface and trait to your
+`Order` entity:
+
+```diff
++use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatAttributedOrderInterface;
++use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatAttributedOrderTrait;
+ use Sylius\Component\Core\Model\Order as BaseOrder;
+
+-class Order extends BaseOrder
++class Order extends BaseOrder implements ChatAttributedOrderInterface
+ {
++    use ChatAttributedOrderTrait;
+```
+
+Then add the `chat_click_ids` column:
+
+```bash
+bin/console doctrine:migrations:diff
+bin/console doctrine:migrations:migrate
+```
+
+The order keeps the click id (`gooseclid`) of every chat link that led to one of its products, oldest click
+first. The order detail shows a **From chatbot** box, last in the right column:
+
+- **Chat order** → a numbered list, one **Open conversation** link per click, to the conversation in the
+  honkers.dev console.
+- **Other orders** → `no`.
+
+> The trait maps the column with Doctrine attributes and annotations. Order mapped in XML → map
+> `chatClickIds` (`json`, nullable) yourself.
+
+> Overriding `@SyliusAdmin/Order/show.html.twig` on Sylius 1 drops the sidebar blocks. Include the field
+> yourself: `{% include '@FluffyDiscordSyliusHonkers/admin/order/from_chat.html.twig' %}`.

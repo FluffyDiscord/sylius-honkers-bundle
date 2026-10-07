@@ -7,6 +7,7 @@ namespace FluffyDiscord\SyliusHonkersBundle\EventListener;
 use FluffyDiscord\Honkers\DTO\ChatOrder;
 use FluffyDiscord\Honkers\Telemetry\TelemetryClient;
 use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
+use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatAttributedOrderInterface;
 use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatClickSession;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use Psr\Log\LoggerInterface;
@@ -29,6 +30,21 @@ class ChatOrderAttributionListener implements ResetInterface
         private readonly BackendReportGuard $backendReportGuard,
         private readonly LoggerInterface    $logger,
     ) {
+    }
+
+    #[AsEventListener(event: 'sylius.order.pre_complete')]
+    public function markOrder(ResourceControllerEvent $event): void
+    {
+        $order = $event->getSubject();
+        if (!$order instanceof ChatAttributedOrderInterface) {
+            return;
+        }
+
+        $clickIdsByProductCode = $this->chatClickSession->getClickIdsByProductCode();
+        $revenueByClickId = $this->getSyliusRevenueByClickId($order, $clickIdsByProductCode);
+        $chatClickIds = $this->getChatClickIdsInClickOrder($clickIdsByProductCode, $revenueByClickId);
+
+        $order->setChatClickIds($chatClickIds);
     }
 
     #[AsEventListener(event: 'sylius.order.post_complete')]
@@ -74,6 +90,33 @@ class ChatOrderAttributionListener implements ResetInterface
     public function reset(): void
     {
         $this->pendingOrders = [];
+    }
+
+    /**
+     * @param array<string, string> $clickIdsByProductCode
+     * @param array<string, int>    $revenueByClickId
+     *
+     * @return list<string>
+     */
+    private function getChatClickIdsInClickOrder(array $clickIdsByProductCode, array $revenueByClickId): array
+    {
+        $chatClickIds = [];
+
+        foreach ($clickIdsByProductCode as $clickId) {
+            $isInOrder = array_key_exists($clickId, $revenueByClickId);
+            if (!$isInOrder) {
+                continue;
+            }
+
+            $isListed = in_array($clickId, $chatClickIds, true);
+            if ($isListed) {
+                continue;
+            }
+
+            $chatClickIds[] = $clickId;
+        }
+
+        return $chatClickIds;
     }
 
     /**

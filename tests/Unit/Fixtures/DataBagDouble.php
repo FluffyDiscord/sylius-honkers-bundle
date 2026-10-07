@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
 
 /**
- * @implements \ArrayAccess<string, string>
+ * @implements \ArrayAccess<string, mixed>
  */
 class DataBagDouble implements \ArrayAccess
 {
     /**
-     * @param array<string, string> $values
+     * @param array<string, mixed> $values
      */
     public function __construct(
         private readonly array $values = [],

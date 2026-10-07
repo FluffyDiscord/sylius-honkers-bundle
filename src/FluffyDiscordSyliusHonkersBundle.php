@@ -46,6 +46,74 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
 
     public function prependExtension(ContainerConfigurator $configurator, ContainerBuilder $container): void
     {
+        $this->prependFromChat($container);
+        $this->prependWidget($container);
+    }
+
+    public function loadExtension(array $config, ContainerConfigurator $configurator, ContainerBuilder $container): void
+    {
+        $configurator->parameters()
+            ->set('fluffydiscord_sylius_honkers.channel_site_keys', $config['channel_site_keys']);
+
+        $configurator->import(__DIR__ . '/../config/services.php');
+
+        $isCmsPagePluginInstalled = class_exists(Page::class);
+        if ($isCmsPagePluginInstalled) {
+            $configurator->services()
+                ->set(CmsPagesDataSource::class)
+                ->autowire()
+                ->autoconfigure()
+                ->arg('$pageRepository', service('monsieurbiz_cms_page.repository.page'));
+        }
+    }
+
+    private function prependFromChat(ContainerBuilder $container): void
+    {
+        $hasTwigHooks = $container->hasExtension('sylius_twig_hooks');
+        if ($hasTwigHooks) {
+            $this->prependFromChatHook($container);
+
+            return;
+        }
+
+        $hasTemplateEvents = $this->hasTemplateEvents($container);
+        if ($hasTemplateEvents) {
+            $this->prependFromChatTemplateBlock($container);
+        }
+    }
+
+    private function prependFromChatHook(ContainerBuilder $container): void
+    {
+        $container->prependExtensionConfig('sylius_twig_hooks', [
+            'hooks' => [
+                'sylius_admin.order.show.content.sections#right' => [
+                    'fluffydiscord_chatbot_from_chat' => [
+                        'template' => '@FluffyDiscordSyliusHonkers/admin/order/show/from_chat.html.twig',
+                        'priority' => -100,
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    private function prependFromChatTemplateBlock(ContainerBuilder $container): void
+    {
+        $container->prependExtensionConfig('sylius_ui', [
+            'events' => [
+                'sylius.admin.order.show.sidebar' => [
+                    'blocks' => [
+                        'fluffydiscord_chatbot_from_chat' => [
+                            'template' => '@FluffyDiscordSyliusHonkers/admin/order/from_chat.html.twig',
+                            'priority' => -100,
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    private function prependWidget(ContainerBuilder $container): void
+    {
         $honkersConfig = $this->mergeHonkersConfig($container);
         if ($honkersConfig['widget']['enabled'] === false) {
             return;
@@ -67,23 +135,6 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
         $hasTemplateEvents = $this->hasTemplateEvents($container);
         if ($hasTemplateEvents) {
             $this->prependWidgetTemplateBlock($container, $widgetContext);
-        }
-    }
-
-    public function loadExtension(array $config, ContainerConfigurator $configurator, ContainerBuilder $container): void
-    {
-        $configurator->parameters()
-            ->set('fluffydiscord_sylius_honkers.channel_site_keys', $config['channel_site_keys']);
-
-        $configurator->import(__DIR__ . '/../config/services.php');
-
-        $isCmsPagePluginInstalled = class_exists(Page::class);
-        if ($isCmsPagePluginInstalled) {
-            $configurator->services()
-                ->set(CmsPagesDataSource::class)
-                ->autowire()
-                ->autoconfigure()
-                ->arg('$pageRepository', service('monsieurbiz_cms_page.repository.page'));
         }
     }
 

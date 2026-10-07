@@ -9,7 +9,7 @@ class HookableMetadataDouble
     public DataBagDouble $context;
 
     /**
-     * @param array<string, string> $context
+     * @param array<string, mixed> $context
      */
     public function __construct(array $context)
     {

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.5.0 - 2026-10-07
+
+### Added
+
+- Orders from chat. Implement `ChatAttributedOrderInterface` with `ChatAttributedOrderTrait` on your `Order`: the
+  click ids of the chat links that led to the order are saved with it at checkout, and the admin order detail
+  links each one to its conversation in the honkers.dev console. Needs a `chat_click_ids` column migration.
+
 ## v1.4.0 - 2026-10-06
 
 ### Added

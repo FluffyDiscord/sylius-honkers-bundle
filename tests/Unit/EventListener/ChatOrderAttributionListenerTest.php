@@ -12,6 +12,7 @@ use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
 use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatClickSession;
 use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
 use FluffyDiscord\SyliusHonkersBundle\EventListener\ChatOrderAttributionListener;
+use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChatAttributedOrder;
 use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LogLevel;
@@ -206,5 +207,66 @@ class ChatOrderAttributionListenerTest extends TestCase
         $listener->reportOrders();
 
         self::assertCount(1, $this->reports);
+    }
+
+    public function testAnOrderKeepsTheClickIdsOfItsChatProducts(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+        $this->chatClickSession->remember('BLADE', 'click-2');
+        $this->chatClickSession->remember('OIL', 'click-1');
+        $this->chatClickSession->remember('BRUSH', 'click-3');
+        $order = $this->createChatAttributedOrder(['CLIPPER', 'BLADE', 'OIL', 'COMB']);
+
+        $listener->markOrder(new ResourceControllerEvent($order));
+
+        self::assertSame(['click-1', 'click-2'], $order->getChatClickIds());
+    }
+
+    public function testTheClickIdsFollowTheClickOrderNotTheItemOrder(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('BLADE', 'click-2');
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+        $order = $this->createChatAttributedOrder(['CLIPPER', 'BLADE']);
+
+        $listener->markOrder(new ResourceControllerEvent($order));
+
+        self::assertSame(['click-2', 'click-1'], $order->getChatClickIds());
+    }
+
+    public function testAnOrderWithoutAChatProductKeepsNoClickIds(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+        $order = $this->createChatAttributedOrder(['BLADE']);
+        $order->setChatClickIds(['stale-click']);
+
+        $listener->markOrder(new ResourceControllerEvent($order));
+
+        self::assertSame([], $order->getChatClickIds());
+    }
+
+    public function testMarkingKeepsTheClicksForTheReport(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->markOrder(new ResourceControllerEvent($this->createChatAttributedOrder(['CLIPPER'])));
+
+        self::assertSame(['CLIPPER' => 'click-1'], $this->chatClickSession->getClickIdsByProductCode());
+    }
+
+    /**
+     * @param list<string> $productCodes
+     */
+    private function createChatAttributedOrder(array $productCodes): ChatAttributedOrder
+    {
+        $order = new ChatAttributedOrder();
+        foreach ($productCodes as $productCode) {
+            $order->addItem($this->createOrderItem($productCode, 10000));
+        }
+
+        return $order;
     }
 }
