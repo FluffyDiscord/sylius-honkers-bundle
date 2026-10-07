@@ -24,6 +24,7 @@ return function (ContainerConfigurator $configurator): void {
             __DIR__ . '/../src/Exception',
             __DIR__ . '/../src/Tool/DTO',
             __DIR__ . '/../src/DataSource/CmsPagesDataSource.php',
+            __DIR__ . '/../src/DataSource/BitBagCmsPagesDataSource.php',
             __DIR__ . '/../src/DependencyInjection',
             __DIR__ . '/../src/FluffyDiscordSyliusHonkersBundle.php',
         ]);

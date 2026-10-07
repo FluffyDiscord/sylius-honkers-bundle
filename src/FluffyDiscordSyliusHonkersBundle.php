@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FluffyDiscord\SyliusHonkersBundle;
 
+use BitBag\SyliusCmsPlugin\Entity\Page as BitBagPage;
+use FluffyDiscord\SyliusHonkersBundle\DataSource\BitBagCmsPagesDataSource;
 use FluffyDiscord\SyliusHonkersBundle\DataSource\CmsPagesDataSource;
 use FluffyDiscord\SyliusHonkersBundle\DependencyInjection\Compiler\SyliusContextAliasPass;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\Page;
@@ -64,6 +66,15 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
                 ->autowire()
                 ->autoconfigure()
                 ->arg('$pageRepository', service('monsieurbiz_cms_page.repository.page'));
+        }
+
+        $isBitBagCmsPluginInstalled = class_exists(BitBagPage::class);
+        if ($isBitBagCmsPluginInstalled) {
+            $configurator->services()
+                ->set(BitBagCmsPagesDataSource::class)
+                ->autowire()
+                ->autoconfigure()
+                ->arg('$pageRepository', service('bitbag_sylius_cms_plugin.repository.page'));
         }
     }
 

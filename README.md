@@ -162,7 +162,8 @@ The backend pulls these in bulk and ingests them into its retrieval index:
   - `productCount` counts the taxon's whole nested-set subtree, only products passing
     `ProductIndexabilityInterface` — so it agrees with the category page
     (`include_all_descendants: true`) and the chatbot.
-- `cms_pages` — enabled Monsieur Biz CMS pages per locale (registered only when the plugin is installed).
+- `cms_pages` — enabled CMS pages of the channel per locale, from Monsieur Biz CMS or BitBag CMS (registered only
+  when one of the plugins is installed).
 
 **Every absolute URL a source or tool emits is built on the resolved channel's hostname**, not the
 request host. A read for `channel=X` returns links on X's domain; only the host is swapped.

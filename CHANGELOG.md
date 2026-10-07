@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.1 - 2026-10-07
+
+### Fixed
+
+- Shops on `bitbag/cms-plugin` get their CMS pages into the chatbot again: the `cms_pages` source now reads BitBag
+  pages too.
+
 ## v1.5.0 - 2026-10-07
 
 ### Added
