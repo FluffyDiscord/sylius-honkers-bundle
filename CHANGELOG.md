@@ -1,14 +1,16 @@
 # Changelog
 
-## v2.0.0 - Unreleased
-
-Upgrade steps → [UPGRADE-2.0.md](UPGRADE-2.0.md).
+## v2.0.1
 
 ### Changed
 
 - Saved-entity notifications send a batch once more when the backend asks to retry within 2 s (rate limit), and log a
   warning when it can't queue them for longer. They were dropped without a log before.
 - `notify-all` also waits out a `503` (backend can't queue right now) and sends the same batch again.
+
+## v2.0.0
+
+Upgrade steps → [UPGRADE-2.0.md](UPGRADE-2.0.md).
 
 ### BC breaks
 
