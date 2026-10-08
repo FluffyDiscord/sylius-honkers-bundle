@@ -2,20 +2,16 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Template;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Template;
 
 use FluffyDiscord\Honkers\Widget\WidgetSnippet;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\AppVariableDouble;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\HookableMetadataDouble;
-use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetExtension;
-use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetRuntime;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\AppVariableDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelCredentialsProviderDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\HookableMetadataDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Twig\ChatbotWidgetExtension;
+use FluffyDiscord\SyliusHonkersPlugin\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Sylius\Component\Channel\Context\ChannelContextInterface;
-use Sylius\Component\Channel\Context\ChannelNotFoundException;
-use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Twig\Environment;
 use Twig\Loader\ArrayLoader;
 use Twig\Loader\ChainLoader;
@@ -39,24 +35,17 @@ class WidgetTemplateTest extends TestCase
         self::assertSame($this->getExpectedMarkup('site-key'), $rendered);
     }
 
-    /**
-     * @param array<string, string> $channelSiteKeys
-     */
-    #[DataProvider('provideChannelSiteKeys')]
-    public function testTheWidgetCarriesTheSiteKeyOfTheCurrentChannel(
-        ?string $currentChannelCode,
-        array $channelSiteKeys,
-        string $expectedSiteKey,
-    ): void {
-        $expectedMarkup = $this->getExpectedMarkup($expectedSiteKey);
+    #[DataProvider('provideCurrentSiteKeys')]
+    public function testTheWidgetCarriesTheSiteKeyOfTheCurrentSite(string $currentSiteKey): void
+    {
+        $expectedMarkup = $this->getExpectedMarkup($currentSiteKey);
 
         $renderedFromHook = $this->render(
             ['hookable_metadata' => new HookableMetadataDouble($this->getWidgetContext())],
-            $currentChannelCode,
-            $channelSiteKeys,
+            $currentSiteKey,
         );
-        $renderedFromTemplateBlock = $this->render($this->getWidgetContext(), $currentChannelCode, $channelSiteKeys);
-        $renderedFromDirectInclude = $this->renderDirectInclude($currentChannelCode, $channelSiteKeys);
+        $renderedFromTemplateBlock = $this->render($this->getWidgetContext(), $currentSiteKey);
+        $renderedFromDirectInclude = $this->renderDirectInclude($currentSiteKey);
 
         self::assertSame($expectedMarkup, $renderedFromHook);
         self::assertSame($expectedMarkup, $renderedFromTemplateBlock);
@@ -64,29 +53,44 @@ class WidgetTemplateTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{?string, array<string, string>, string}>
+     * @return iterable<string, array{string}>
      */
-    public static function provideChannelSiteKeys(): iterable
+    public static function provideCurrentSiteKeys(): iterable
     {
-        $channelSiteKeys = ['CZ' => 'cz-key', 'SK' => 'sk-key'];
+        yield 'current site' => ['sk-key'];
+        yield 'no current site renders nothing' => [''];
+    }
 
-        yield 'mapped channel' => ['SK', $channelSiteKeys, 'sk-key'];
-        yield 'another mapped channel' => ['CZ', $channelSiteKeys, 'cz-key'];
-        yield 'unmapped channel falls back to the context key' => ['DE', $channelSiteKeys, 'site-key'];
-        yield 'no channel keys' => ['SK', [], 'site-key'];
-        yield 'no resolvable channel falls back to the context key' => [null, $channelSiteKeys, 'site-key'];
-        yield 'channel mapped to an empty key renders nothing' => ['SK', ['CZ' => 'cz-key', 'SK' => ''], ''];
+    public function testTheWidgetRendersWithASiteKeyAndNoIngestSecret(): void
+    {
+        $loader = new FilesystemLoader(__DIR__ . '/../../../templates');
+        $twig = $this->createEnvironment($loader, 'sk-key', '');
+
+        $rendered = trim($twig->render('shop/widget.html.twig', $this->getWidgetContext()));
+
+        self::assertSame($this->getExpectedMarkup('sk-key'), $rendered);
+    }
+
+    public function testTheScriptLoadsWithoutDeferWhenDeferIsOff(): void
+    {
+        $widgetContext = ['defer' => false] + $this->getWidgetContext();
+
+        $renderedFromHook = $this->render(['hookable_metadata' => new HookableMetadataDouble($widgetContext)]);
+        $renderedFromTemplateBlock = $this->render($widgetContext);
+
+        self::assertStringStartsWith('<script src="https://cdn.test/chat.js"></script>', $renderedFromHook);
+        self::assertStringStartsWith('<script src="https://cdn.test/chat.js"></script>', $renderedFromTemplateBlock);
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string|bool>
      */
     private function getWidgetContext(): array
     {
         return [
             'backend_url' => 'https://backend.test',
-            'site_key' => 'site-key',
             'widget_cdn_url' => 'https://cdn.test/chat.js',
+            'defer' => true,
         ];
     }
 
@@ -101,68 +105,41 @@ class WidgetTemplateTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed>  $context
-     * @param array<string, string> $channelSiteKeys
+     * @param array<string, mixed> $context
      */
-    private function render(array $context, ?string $currentChannelCode = 'CZ', array $channelSiteKeys = []): string
+    private function render(array $context, string $currentSiteKey = 'site-key'): string
     {
-        $twig = $this->createEnvironment(new FilesystemLoader(__DIR__ . '/../../../templates'), $currentChannelCode, $channelSiteKeys);
+        $twig = $this->createEnvironment(new FilesystemLoader(__DIR__ . '/../../../templates'), $currentSiteKey);
 
         return trim($twig->render('shop/widget.html.twig', $context));
     }
 
-    /**
-     * @param array<string, string> $channelSiteKeys
-     */
-    private function renderDirectInclude(?string $currentChannelCode, array $channelSiteKeys): string
+    private function renderDirectInclude(string $currentSiteKey): string
     {
         $shopLayoutLoader = new ArrayLoader([
             'shop_layout.html.twig' => "{% include 'shop/widget.html.twig' with chatbot_widget only %}",
         ]);
         $loader = new ChainLoader([$shopLayoutLoader, new FilesystemLoader(__DIR__ . '/../../../templates')]);
-        $twig = $this->createEnvironment($loader, $currentChannelCode, $channelSiteKeys);
+        $twig = $this->createEnvironment($loader, $currentSiteKey);
 
         return trim($twig->render('shop_layout.html.twig', ['chatbot_widget' => $this->getWidgetContext()]));
     }
 
-    /**
-     * @param array<string, string> $channelSiteKeys
-     */
     private function createEnvironment(
         LoaderInterface $loader,
-        ?string $currentChannelCode,
-        array $channelSiteKeys,
+        string $currentSiteKey,
+        string $ingestSecret = 'ingest-secret',
     ): Environment {
         $twig = new Environment($loader, ['strict_variables' => true]);
         $twig->addGlobal('app', new AppVariableDouble('cs_CZ'));
         $twig->addExtension(new ChatbotWidgetExtension());
 
-        $runtime = $this->createRuntime($currentChannelCode, $channelSiteKeys);
+        $credentialsProvider = new ChannelCredentialsProviderDouble(currentSiteKey: $currentSiteKey, ingestSecret: $ingestSecret);
+        $runtime = new ChatbotWidgetRuntime($credentialsProvider, new WidgetSnippet());
         $twig->addRuntimeLoader(new FactoryRuntimeLoader([
             ChatbotWidgetRuntime::class => fn (): ChatbotWidgetRuntime => $runtime,
         ]));
 
         return $twig;
-    }
-
-    /**
-     * @param array<string, string> $channelSiteKeys
-     */
-    private function createRuntime(?string $currentChannelCode, array $channelSiteKeys): ChatbotWidgetRuntime
-    {
-        $channelContext = $this->createStub(ChannelContextInterface::class);
-        if ($currentChannelCode === null) {
-            $channelContext->method('getChannel')->willThrowException(new ChannelNotFoundException());
-        } else {
-            $channelContext->method('getChannel')->willReturn((new ChannelFixtureFactory())->createChannel($currentChannelCode, ['cs_CZ']));
-        }
-
-        $siteKeyResolver = new SiteKeyResolver(
-            $this->createStub(ChannelRepositoryInterface::class),
-            'config-default-key',
-            $channelSiteKeys,
-        );
-
-        return new ChatbotWidgetRuntime($channelContext, $siteKeyResolver, new WidgetSnippet());
     }
 }

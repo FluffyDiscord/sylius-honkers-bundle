@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Channel;
+namespace FluffyDiscord\SyliusHonkersPlugin\Channel;
 
 use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;

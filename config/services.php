@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use FluffyDiscord\SyliusHonkersBundle\Contract\ChannelTaxonRootsInterface;
-use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
-use FluffyDiscord\SyliusHonkersBundle\Contract\ProductViewFactoryInterface;
-use FluffyDiscord\SyliusHonkersBundle\Product\ProductIndexability;
-use FluffyDiscord\SyliusHonkersBundle\Product\ProductViewFactory;
-use FluffyDiscord\SyliusHonkersBundle\Taxon\ChannelTaxonRoots;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ChannelTaxonRootsInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ProductIndexabilityInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ProductViewFactoryInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Product\ProductIndexability;
+use FluffyDiscord\SyliusHonkersPlugin\Product\ProductViewFactory;
+use FluffyDiscord\SyliusHonkersPlugin\Taxon\ChannelTaxonRoots;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 return function (ContainerConfigurator $configurator): void {
@@ -17,7 +17,7 @@ return function (ContainerConfigurator $configurator): void {
         ->autowire()
         ->autoconfigure();
 
-    $services->load('FluffyDiscord\\SyliusHonkersBundle\\', __DIR__ . '/../src/')
+    $services->load('FluffyDiscord\\SyliusHonkersPlugin\\', __DIR__ . '/../src/')
         ->exclude([
             __DIR__ . '/../src/DTO',
             __DIR__ . '/../src/Enum',
@@ -26,7 +26,7 @@ return function (ContainerConfigurator $configurator): void {
             __DIR__ . '/../src/DataSource/CmsPagesDataSource.php',
             __DIR__ . '/../src/DataSource/BitBagCmsPagesDataSource.php',
             __DIR__ . '/../src/DependencyInjection',
-            __DIR__ . '/../src/FluffyDiscordSyliusHonkersBundle.php',
+            __DIR__ . '/../src/FluffyDiscordSyliusHonkersPlugin.php',
         ]);
 
     $services->alias(ChannelTaxonRootsInterface::class, ChannelTaxonRoots::class);

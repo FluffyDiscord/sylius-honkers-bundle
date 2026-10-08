@@ -2,19 +2,21 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Ingest;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Ingest;
 
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
 use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingLogger;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelCredentialsProviderDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelFixtureFactory;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\RecordingLogger;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LogLevel;
+use Sylius\Component\Channel\Model\ChannelInterface;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Psr18Client;
@@ -33,6 +35,7 @@ class CatalogChangeNotifierTest extends TestCase
     }
 
     /**
+     * @param array<string, string>                                        $providedSiteKeys
      * @param array<string, string>                                        $channelSiteKeys
      * @param array<string, array{locales: list<string>, enabled?: bool}> $channelDefinitions
      */
@@ -40,10 +43,12 @@ class CatalogChangeNotifierTest extends TestCase
         array $responses,
         string $backendUrl = 'https://backend.example',
         string $environment = 'prod',
-        string $defaultSiteKey = 'site-key',
+        array $providedSiteKeys = ['WEB' => 'site-key'],
+        string $currentSiteKey = 'site-key',
         array $channelSiteKeys = [],
-        array $channelDefinitions = [],
+        array $channelDefinitions = ['WEB' => ['locales' => ['cs_CZ', 'en_US']]],
         ?ChannelRepositoryInterface $channelRepository = null,
+        string $ingestSecret = 'ingest-secret',
     ): CatalogChangeNotifier {
         $client = new MockHttpClient(function (string $method, string $url, array $options) use (&$responses): MockResponse {
             $this->capturedRequests[] = ['url' => $url, 'options' => $options];
@@ -52,13 +57,16 @@ class CatalogChangeNotifierTest extends TestCase
         });
 
         $factory = new Psr17Factory();
-        $ingestClient = new CatalogIngestClient(new Psr18Client($client), $factory, $factory, $backendUrl, 'ingest-secret');
+        $ingestClient = new CatalogIngestClient(new Psr18Client($client), $factory, $factory, $backendUrl);
+        $credentialsProvider = new ChannelCredentialsProviderDouble($providedSiteKeys, $currentSiteKey, $ingestSecret);
+        $channelRepository ??= $this->createChannelRepository($channelDefinitions);
 
         return new CatalogChangeNotifier(
             $ingestClient,
             $this->logger,
-            new SiteKeyResolver($channelRepository ?? $this->createChannelRepository($channelDefinitions), $defaultSiteKey, $channelSiteKeys),
-            new BackendReportGuard($this->logger, $backendUrl, 'ingest-secret', $environment),
+            new SiteKeyResolver($channelRepository, $credentialsProvider, $channelSiteKeys),
+            $credentialsProvider,
+            new BackendReportGuard($this->logger, $backendUrl, $environment),
         );
     }
 
@@ -73,6 +81,15 @@ class CatalogChangeNotifierTest extends TestCase
         $channelRepository->method('findAll')->willReturn($channels);
 
         return $channelRepository;
+    }
+
+    private function createNotifiedChannel(?string $channelCode): ?ChannelInterface
+    {
+        if ($channelCode === null) {
+            return null;
+        }
+
+        return (new ChannelFixtureFactory())->createChannel($channelCode, ['cs_CZ']);
     }
 
     /**
@@ -99,7 +116,7 @@ class CatalogChangeNotifierTest extends TestCase
     {
         $channelRepository = $this->createStub(ChannelRepositoryInterface::class);
         $channelRepository->method('findAll')->willThrowException(new \RuntimeException('database gone'));
-        $notifier = $this->createNotifier([], channelSiteKeys: ['CZ' => 'cz-key'], channelRepository: $channelRepository);
+        $notifier = $this->createNotifier([], channelRepository: $channelRepository);
 
         $notifier->collect(CatalogSourceName::Products, 'cs_CZ', 'T-SHIRT-01');
         $notifier->flush();
@@ -112,13 +129,14 @@ class CatalogChangeNotifierTest extends TestCase
     }
 
     /**
+     * @param array<string, string> $providedSiteKeys
      * @param array<string, string> $channelSiteKeys
      * @param list<string>          $expectedWarnedChannels
      * @param list<string>          $expectedDebuggedChannels
      */
     #[DataProvider('provideSkippedChannelLogs')]
     public function testOnlyKeylessChannelsServingAChangedLocaleAreLogged(
-        string $defaultSiteKey,
+        array $providedSiteKeys,
         array $channelSiteKeys,
         string $changedLocale,
         array $expectedWarnedChannels,
@@ -126,7 +144,7 @@ class CatalogChangeNotifierTest extends TestCase
     ): void {
         $notifier = $this->createNotifier(
             [],
-            defaultSiteKey: $defaultSiteKey,
+            providedSiteKeys: $providedSiteKeys,
             channelSiteKeys: $channelSiteKeys,
             channelDefinitions: ['CZ' => ['locales' => ['cs_CZ']], 'SK' => ['locales' => ['sk_SK']]],
         );
@@ -139,14 +157,14 @@ class CatalogChangeNotifierTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, array<string, string>, string, list<string>, list<string>}>
+     * @return iterable<string, array{array<string, string>, array<string, string>, string, list<string>, list<string>}>
      */
     public static function provideSkippedChannelLogs(): iterable
     {
-        yield 'unmapped channel without default serving the locale warns' => ['', ['CZ' => 'cz-key'], 'sk_SK', ['SK'], []];
-        yield 'unmapped channel without default not serving the locale is silent' => ['', ['CZ' => 'cz-key'], 'cs_CZ', [], []];
-        yield 'unmapped channel with default is silent' => ['site-key', ['CZ' => 'cz-key'], 'sk_SK', [], []];
-        yield 'channel mapped to an empty key logs at debug' => ['site-key', ['CZ' => 'cz-key', 'SK' => ''], 'sk_SK', [], ['SK']];
+        yield 'keyless channel serving the locale warns' => [['CZ' => 'cz-key'], [], 'sk_SK', ['SK'], []];
+        yield 'keyless channel not serving the locale is silent' => [['CZ' => 'cz-key'], [], 'cs_CZ', [], []];
+        yield 'channel with a site key is silent' => [['CZ' => 'cz-key', 'SK' => 'site-key'], [], 'sk_SK', [], []];
+        yield 'channel mapped to an empty key logs at debug' => [['CZ' => 'cz-key'], ['CZ' => 'cz-key', 'SK' => ''], 'sk_SK', [], ['SK']];
     }
 
     /**
@@ -181,20 +199,19 @@ class CatalogChangeNotifierTest extends TestCase
     }
 
     /**
-     * @param array<string, string>                                        $channelSiteKeys
+     * @param array<string, string>                                        $providedSiteKeys
      * @param array<string, array{locales: list<string>, enabled?: bool}> $channelDefinitions
      * @param list<array{string, string}>                                  $collectedChanges
      * @param list<string>                                                 $expectedSiteRequests
      */
     #[DataProvider('provideSiteRouting')]
     public function testFlushSendsEveryChangeToEverySiteServingItsLocale(
-        string $defaultSiteKey,
-        array $channelSiteKeys,
+        array $providedSiteKeys,
         array $channelDefinitions,
         array $collectedChanges,
         array $expectedSiteRequests,
     ): void {
-        $notifier = $this->createNotifier([], defaultSiteKey: $defaultSiteKey, channelSiteKeys: $channelSiteKeys, channelDefinitions: $channelDefinitions);
+        $notifier = $this->createNotifier([], providedSiteKeys: $providedSiteKeys, channelDefinitions: $channelDefinitions);
 
         foreach ($collectedChanges as [$locale, $externalId]) {
             $notifier->collect(CatalogSourceName::Products, $locale, $externalId);
@@ -205,7 +222,7 @@ class CatalogChangeNotifierTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, array<string, string>, array<string, array{locales: list<string>, enabled?: bool}>, list<array{string, string}>, list<string>}>
+     * @return iterable<string, array{array<string, string>, array<string, array{locales: list<string>, enabled?: bool}>, list<array{string, string}>, list<string>}>
      */
     public static function provideSiteRouting(): iterable
     {
@@ -216,20 +233,17 @@ class CatalogChangeNotifierTest extends TestCase
             'AT' => ['locales' => ['de_DE']],
         ];
 
-        yield 'without channel keys one request per locale reaches the default site' => [
-            'site-key',
-            [],
+        yield 'channels on one site get one request per locale they serve' => [
+            ['CZ' => 'site-key', 'SK' => 'site-key', 'DE' => 'site-key', 'AT' => 'site-key'],
             $shopChannels,
             [['cs_CZ', 'A'], ['sk_SK', 'A'], ['ru_RU', 'A']],
             [
                 'products cs_CZ A -> site-key.ingest-secret',
                 'products sk_SK A -> site-key.ingest-secret',
-                'products ru_RU A -> site-key.ingest-secret',
             ],
         ];
 
         yield 'every channel locale reaches its own site only' => [
-            '',
             ['CZ' => 'cz-key', 'SK' => 'sk-key', 'DE' => 'de-key', 'AT' => 'at-key'],
             $shopChannels,
             [['cs_CZ', 'A'], ['cs_CZ', 'B'], ['sk_SK', 'A']],
@@ -240,7 +254,6 @@ class CatalogChangeNotifierTest extends TestCase
         ];
 
         yield 'a locale served by two sites reaches both' => [
-            '',
             ['CZ' => 'cz-key', 'SK' => 'sk-key', 'DE' => 'de-key', 'AT' => 'at-key'],
             $shopChannels,
             [['de_DE', 'A']],
@@ -251,27 +264,13 @@ class CatalogChangeNotifierTest extends TestCase
         ];
 
         yield 'two channels on one site key share one request' => [
-            '',
             ['CZ' => 'cz-key', 'SK' => 'sk-key', 'DE' => 'dach-key', 'AT' => 'dach-key'],
             $shopChannels,
             [['de_DE', 'A']],
             ['products de_DE A -> dach-key.ingest-secret'],
         ];
 
-        yield 'an unmapped channel falls back to the default site' => [
-            'site-key',
-            ['CZ' => 'cz-key'],
-            $shopChannels,
-            [['cs_CZ', 'A'], ['sk_SK', 'A'], ['de_DE', 'A']],
-            [
-                'products cs_CZ A -> cz-key.ingest-secret',
-                'products sk_SK A -> site-key.ingest-secret',
-                'products de_DE A -> site-key.ingest-secret',
-            ],
-        ];
-
         yield 'a channel without a resolvable key is skipped' => [
-            '',
             ['CZ' => 'cz-key'],
             $shopChannels,
             [['cs_CZ', 'A'], ['sk_SK', 'A']],
@@ -283,8 +282,7 @@ class CatalogChangeNotifierTest extends TestCase
     {
         $notifier = $this->createNotifier(
             [],
-            defaultSiteKey: '',
-            channelSiteKeys: ['DE' => 'de-key', 'AT' => 'at-key'],
+            providedSiteKeys: ['DE' => 'de-key', 'AT' => 'at-key'],
             channelDefinitions: ['DE' => ['locales' => ['de_DE']], 'AT' => ['locales' => ['de_DE']]],
         );
 
@@ -303,20 +301,19 @@ class CatalogChangeNotifierTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $channelSiteKeys
-     * @param list<string>          $expectedLogMessages
+     * @param list<string> $expectedLogMessages
      */
     #[DataProvider('provideChannelNotifications')]
     public function testNotifyUsesTheSiteKeyOfTheGivenChannel(
-        string $defaultSiteKey,
-        array $channelSiteKeys,
+        string $currentSiteKey,
         ?string $channelCode,
         ?string $expectedAuthorization,
         array $expectedLogMessages,
     ): void {
-        $notifier = $this->createNotifier([], defaultSiteKey: $defaultSiteKey, channelSiteKeys: $channelSiteKeys);
+        $notifier = $this->createNotifier([], providedSiteKeys: ['CZ' => 'cz-key'], currentSiteKey: $currentSiteKey);
+        $channel = $this->createNotifiedChannel($channelCode);
 
-        $outcome = $notifier->notify(CatalogSourceName::Products, 'cs_CZ', ['T-SHIRT-01'], $channelCode);
+        $outcome = $notifier->notify(CatalogSourceName::Products, 'cs_CZ', ['T-SHIRT-01'], $channel);
 
         $expectedRequestCount = $expectedAuthorization === null ? 0 : 1;
         self::assertSame($expectedAuthorization !== null, $outcome->accepted);
@@ -328,53 +325,57 @@ class CatalogChangeNotifierTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, array<string, string>, ?string, ?string, list<string>}>
+     * @return iterable<string, array{string, ?string, ?string, list<string>}>
      */
     public static function provideChannelNotifications(): iterable
     {
-        yield 'mapped channel' => ['site-key', ['CZ' => 'cz-key'], 'CZ', 'cz-key.ingest-secret', []];
-        yield 'unmapped channel falls back' => ['site-key', ['CZ' => 'cz-key'], 'SK', 'site-key.ingest-secret', []];
-        yield 'no channel uses the default' => ['site-key', ['CZ' => 'cz-key'], null, 'site-key.ingest-secret', []];
-        yield 'unmapped channel without default is refused' => [
-            '',
-            ['CZ' => 'cz-key'],
+        yield 'channel with a site' => ['site-key', 'CZ', 'cz-key.ingest-secret', []];
+        yield 'no channel uses the current site' => ['site-key', null, 'site-key.ingest-secret', []];
+        yield 'channel without a site is refused' => [
+            'site-key',
             'SK',
             null,
-            ['Chatbot: the channel has no site key, skipping the catalog notification.'],
+            ['Chatbot: the channel has no site key or ingest secret, skipping the catalog notification.'],
         ];
-        yield 'no channel without default is refused' => [
+        yield 'no channel without a current site is refused' => [
             '',
-            ['CZ' => 'cz-key'],
             null,
             null,
-            ['Chatbot: no default site key is configured, skipping the catalog notification.'],
+            ['Chatbot: the current channel has no site key or ingest secret, skipping the catalog notification.'],
         ];
     }
 
-    /**
-     * @param array<string, string> $channelSiteKeys
-     * @param list<string>          $expectedMissingKeys
-     */
-    #[DataProvider('provideSiteKeyConfigurations')]
-    public function testTheSiteKeyIsMissingOnlyWithoutDefaultAndChannelKeys(
-        string $defaultSiteKey,
-        array $channelSiteKeys,
-        array $expectedMissingKeys,
-    ): void {
-        $notifier = $this->createNotifier([], defaultSiteKey: $defaultSiteKey, channelSiteKeys: $channelSiteKeys);
+    #[DataProvider('provideNotifiedChannelCodes')]
+    public function testNotifySkipsASiteWithoutAnIngestSecret(?string $channelCode): void
+    {
+        $notifier = $this->createNotifier([], providedSiteKeys: ['CZ' => 'cz-key'], ingestSecret: '');
+        $channel = $this->createNotifiedChannel($channelCode);
 
-        self::assertSame($expectedMissingKeys, $notifier->getMissingConfigurationKeys());
+        $outcome = $notifier->notify(CatalogSourceName::Products, 'cs_CZ', ['T-SHIRT-01'], $channel);
+
+        self::assertFalse($outcome->accepted);
+        self::assertSame([], $this->capturedRequests);
+        self::assertCount(1, $this->logger->records);
     }
 
     /**
-     * @return iterable<string, array{string, array<string, string>, list<string>}>
+     * @return iterable<string, array{?string}>
      */
-    public static function provideSiteKeyConfigurations(): iterable
+    public static function provideNotifiedChannelCodes(): iterable
     {
-        yield 'default key' => ['site-key', [], []];
-        yield 'channel keys only' => ['', ['CZ' => 'cz-key'], []];
-        yield 'neither' => ['', [], ['widget.site_key or channel_site_keys']];
-        yield 'only empty channel keys' => ['', ['CZ' => ''], ['widget.site_key or channel_site_keys']];
+        yield 'given channel' => ['CZ'];
+        yield 'current site' => [null];
+    }
+
+    public function testFlushSkipsAChannelWithoutAnIngestSecretAndLogsIt(): void
+    {
+        $notifier = $this->createNotifier([], ingestSecret: '');
+
+        $notifier->collect(CatalogSourceName::Products, 'cs_CZ', 'T-SHIRT-01');
+        $notifier->flush();
+
+        self::assertSame([], $this->capturedRequests);
+        self::assertSame(['WEB'], $this->getLoggedChannels('warning'));
     }
 
     public function testFlushPostsOnePayloadPerSourceAndLocale(): void

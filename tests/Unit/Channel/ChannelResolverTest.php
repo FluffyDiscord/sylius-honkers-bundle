@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Channel;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Channel;
 
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelFixtureFactory;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Channel\Context\ChannelContextInterface;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;

@@ -2,19 +2,20 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Command;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Command;
 
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\Command\NotifyAllCommand;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Command\NotifyAllCommand;
 use FluffyDiscord\Honkers\DTO\SourceDocument;
 use FluffyDiscord\Honkers\Enum\DocumentKind;
 use FluffyDiscord\Honkers\Locale\LocaleMatcher;
-use FluffyDiscord\SyliusHonkersBundle\Locale\SyliusLocaleContext;
+use FluffyDiscord\SyliusHonkersPlugin\Locale\SyliusLocaleContext;
 use FluffyDiscord\Honkers\Registry\DataSourceRegistry;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingDataSource;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelCredentialsProviderDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelFixtureFactory;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\RecordingDataSource;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
@@ -108,14 +109,13 @@ class NotifyAllCommandTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $channelSiteKeys
+     * @param array<string, string> $providedSiteKeys
      * @param list<?string>         $expectedNotifiedChannelCodes
      * @param list<string>          $expectedQueriedLocales
      */
     #[DataProvider('provideChannelSiteKeyOutcomes')]
     public function testTheChannelSiteKeyDecidesWhatIsAnnounced(
-        string $defaultSiteKey,
-        array $channelSiteKeys,
+        array $providedSiteKeys,
         bool $isChannelEnabled,
         bool $hasDocuments,
         int $expectedExitCode,
@@ -125,8 +125,8 @@ class NotifyAllCommandTest extends TestCase
     ): void {
         $documents = $hasDocuments ? [$this->createDocument('T-SHIRT-01')] : [];
         $source = new RecordingDataSource('products', null, $documents);
-        $siteKeyResolver = $this->createSiteKeyResolver($defaultSiteKey, $channelSiteKeys);
-        $notifier = new RecordingCatalogChangeNotifier($siteKeyResolver, acceptsNotifications: false);
+        $credentialsProvider = new ChannelCredentialsProviderDouble($providedSiteKeys);
+        $notifier = new RecordingCatalogChangeNotifier($this->createSiteKeyResolver($credentialsProvider), acceptsNotifications: false);
         $channelResolver = $this->createChannelResolver('SK', ['sk_SK'], $isChannelEnabled);
         $command = new NotifyAllCommand(
             $this->createRegistry($source),
@@ -134,7 +134,7 @@ class NotifyAllCommandTest extends TestCase
             $channelResolver,
             $this->createLocaleContext($channelResolver),
             new LocaleMatcher(),
-            $siteKeyResolver,
+            $credentialsProvider,
         );
         $output = new BufferedOutput();
 
@@ -147,42 +147,50 @@ class NotifyAllCommandTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, array<string, string>, bool, bool, int, string, list<?string>, list<string>}>
+     * @return iterable<string, array{array<string, string>, bool, bool, int, string, list<?string>, list<string>}>
      */
     public static function provideChannelSiteKeyOutcomes(): iterable
     {
-        yield 'no channel keys announce with the default key' => [
-            'site-key', [], true, true,
-            Command::FAILURE, 'a batch of 1 ids was not accepted', [null], ['sk_SK'],
-        ];
-        yield 'no channel keys ignore whether the channel is enabled' => [
-            'site-key', [], false, false,
-            Command::SUCCESS, 'The whole catalog was announced', [], ['sk_SK'],
-        ];
-        yield 'mapped channel announces with its own code' => [
-            '', ['SK' => 'sk-key'], true, true,
+        yield 'channel with a site announces with its own code' => [
+            ['SK' => 'sk-key'], true, true,
             Command::FAILURE, 'a batch of 1 ids was not accepted', ['SK'], ['sk_SK'],
         ];
-        yield 'mapped channel with an empty catalog succeeds' => [
-            '', ['SK' => 'sk-key'], true, false,
+        yield 'channel with a site and an empty catalog succeeds' => [
+            ['SK' => 'sk-key'], true, false,
             Command::SUCCESS, 'The whole catalog was announced', [], ['sk_SK'],
         ];
-        yield 'unmapped channel with a default key announces with its own code' => [
-            'site-key', ['CZ' => 'cz-key'], true, true,
-            Command::FAILURE, 'a batch of 1 ids was not accepted', ['SK'], ['sk_SK'],
-        ];
-        yield 'unmapped channel without a default key is refused' => [
-            '', ['CZ' => 'cz-key'], true, true,
-            Command::FAILURE, 'The channel "SK" has no site key', [], [],
-        ];
-        yield 'channel mapped to an empty key is refused' => [
-            'site-key', ['SK' => ''], true, true,
+        yield 'channel without a site is refused' => [
+            ['CZ' => 'cz-key'], true, true,
             Command::FAILURE, 'The channel "SK" has no site key', [], [],
         ];
         yield 'disabled channel is refused' => [
-            '', ['SK' => 'sk-key'], false, true,
+            ['SK' => 'sk-key'], false, true,
             Command::FAILURE, 'The channel "SK" is disabled', [], [],
         ];
+    }
+
+    public function testAChannelWithoutAnIngestSecretIsRefused(): void
+    {
+        $source = new RecordingDataSource('products', null, [$this->createDocument('T-SHIRT-01')]);
+        $credentialsProvider = new ChannelCredentialsProviderDouble(['SK' => 'sk-key'], ingestSecret: '');
+        $notifier = new RecordingCatalogChangeNotifier($this->createSiteKeyResolver($credentialsProvider));
+        $channelResolver = $this->createChannelResolver('SK', ['sk_SK']);
+        $command = new NotifyAllCommand(
+            $this->createRegistry($source),
+            $notifier,
+            $channelResolver,
+            $this->createLocaleContext($channelResolver),
+            new LocaleMatcher(),
+            $credentialsProvider,
+        );
+        $output = new BufferedOutput();
+
+        $exitCode = $command->__invoke($this->createStyle($output), 'products', null, 'SK');
+
+        self::assertSame(Command::FAILURE, $exitCode);
+        self::assertStringContainsString('The channel "SK" has no ingest secret', $output->fetch());
+        self::assertSame([], $notifier->notifications);
+        self::assertSame([], $source->queriedLocales);
     }
 
     /**
@@ -190,16 +198,16 @@ class NotifyAllCommandTest extends TestCase
      */
     private function createCommand(RecordingDataSource $source, array $channelLocales): NotifyAllCommand
     {
-        $siteKeyResolver = $this->createSiteKeyResolver('site-key', []);
+        $credentialsProvider = new ChannelCredentialsProviderDouble(['CZ' => 'site-key']);
         $channelResolver = $this->createChannelResolver('CZ', $channelLocales);
 
         return new NotifyAllCommand(
             $this->createRegistry($source),
-            new RecordingCatalogChangeNotifier($siteKeyResolver),
+            new RecordingCatalogChangeNotifier($this->createSiteKeyResolver($credentialsProvider)),
             $channelResolver,
             $this->createLocaleContext($channelResolver),
             new LocaleMatcher(),
-            $siteKeyResolver,
+            $credentialsProvider,
         );
     }
 
@@ -217,12 +225,9 @@ class NotifyAllCommandTest extends TestCase
         return new DataSourceRegistry([$source]);
     }
 
-    /**
-     * @param array<string, string> $channelSiteKeys
-     */
-    private function createSiteKeyResolver(string $defaultSiteKey, array $channelSiteKeys): SiteKeyResolver
+    private function createSiteKeyResolver(ChannelCredentialsProviderDouble $credentialsProvider): SiteKeyResolver
     {
-        return new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), $defaultSiteKey, $channelSiteKeys);
+        return new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), $credentialsProvider, []);
     }
 
     /**

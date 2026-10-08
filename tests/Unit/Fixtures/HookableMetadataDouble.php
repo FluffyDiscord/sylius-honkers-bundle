@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures;
 
 class HookableMetadataDouble
 {

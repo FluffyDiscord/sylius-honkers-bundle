@@ -2,28 +2,36 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit;
 
+use Doctrine\ORM\EntityManagerInterface;
 use FluffyDiscord\Honkers\Contract\ChatbotLocaleContextInterface;
 use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
+use FluffyDiscord\Honkers\Pairing\HostMatcher;
 use FluffyDiscord\Honkers\Widget\WidgetSnippet;
-use FluffyDiscord\HonkersBundle\Contract\SiteKeyContextInterface;
+use FluffyDiscord\HonkersBundle\Contract\CredentialsProviderInterface;
+use FluffyDiscord\HonkersBundle\Contract\CredentialsWriterInterface;
+use FluffyDiscord\HonkersBundle\Credentials\EnvCredentialsProvider;
 use FluffyDiscord\HonkersBundle\FluffyDiscordHonkersBundle;
 use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\FluffyDiscordSyliusHonkersBundle;
-use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
-use FluffyDiscord\SyliusHonkersBundle\Locale\SyliusLocaleContext;
-use FluffyDiscord\SyliusHonkersBundle\Site\ChannelSiteKeyContext;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\NamedExtension;
-use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetExtension;
-use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetRuntime;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Credentials\ChannelCredentialsProviderInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Credentials\SyliusCredentialsProvider;
+use FluffyDiscord\SyliusHonkersPlugin\DependencyInjection\Compiler\SyliusContextAliasPass;
+use FluffyDiscord\SyliusHonkersPlugin\FluffyDiscordSyliusHonkersPlugin;
+use FluffyDiscord\SyliusHonkersPlugin\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersPlugin\Locale\SyliusLocaleContext;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\HonkersChannel;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\NamedExtension;
+use FluffyDiscord\SyliusHonkersPlugin\Twig\ChatbotWidgetExtension;
+use FluffyDiscord\SyliusHonkersPlugin\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Channel\Context\ChannelContextInterface;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
+use Sylius\Component\Core\Model\Channel;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Config\FileLocator;
@@ -34,7 +42,7 @@ use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Twig\Extension\ExtensionInterface;
 use Twig\Extension\RuntimeExtensionInterface;
 
-class FluffyDiscordSyliusHonkersBundleTest extends TestCase
+class FluffyDiscordSyliusHonkersPluginTest extends TestCase
 {
     public function testTheWidgetIsRegisteredAsATwigHookWhenTheShopHasThem(): void
     {
@@ -45,7 +53,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $hooks = $container->getExtensionConfig('sylius_twig_hooks');
         $widget = $hooks[0]['hooks']['sylius_shop.base#javascripts']['fluffydiscord_chatbot_widget'];
 
-        self::assertSame('@FluffyDiscordSyliusHonkers/shop/widget.html.twig', $widget['template']);
+        self::assertSame('@FluffyDiscordSyliusHonkersPlugin/shop/widget.html.twig', $widget['template']);
         self::assertSame($this->getExpectedWidgetContext(), $widget['context']);
         self::assertSame([], $container->getExtensionConfig('sylius_ui'));
     }
@@ -61,7 +69,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $events = $container->getExtensionConfig('sylius_ui');
         $widget = $events[0]['events']['sylius.shop.layout.javascripts']['blocks']['fluffydiscord_chatbot_widget'];
 
-        self::assertSame('@FluffyDiscordSyliusHonkers/shop/widget.html.twig', $widget['template']);
+        self::assertSame('@FluffyDiscordSyliusHonkersPlugin/shop/widget.html.twig', $widget['template']);
         self::assertSame($this->getExpectedWidgetContext(), $widget['context']);
         self::assertSame([], $container->getExtensionConfig('sylius_twig_hooks'));
     }
@@ -77,6 +85,18 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         self::assertArrayNotHasKey('sylius_shop.base#javascripts', $hooks[0]['hooks']);
     }
 
+    public function testTheWidgetDeferSettingReachesTheHookContext(): void
+    {
+        $container = $this->createContainer(['sylius_twig_hooks', 'sylius_ui'], ['defer' => false]);
+
+        $this->prependExtension($container);
+
+        $hooks = $container->getExtensionConfig('sylius_twig_hooks');
+        $widget = $hooks[0]['hooks']['sylius_shop.base#javascripts']['fluffydiscord_chatbot_widget'];
+
+        self::assertFalse($widget['context']['defer']);
+    }
+
     public function testTheFromChatFieldIsRegisteredAsAnAdminTwigHook(): void
     {
         $container = $this->createContainer(['sylius_twig_hooks', 'sylius_ui']);
@@ -86,7 +106,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $hooks = $container->getExtensionConfig('sylius_twig_hooks');
         $fromChat = $hooks[1]['hooks']['sylius_admin.order.show.content.sections#right']['fluffydiscord_chatbot_from_chat'];
 
-        self::assertSame('@FluffyDiscordSyliusHonkers/admin/order/show/from_chat.html.twig', $fromChat['template']);
+        self::assertSame('@FluffyDiscordSyliusHonkersPlugin/admin/order/show/from_chat.html.twig', $fromChat['template']);
     }
 
     public function testTheFromChatFieldIsRegisteredAsAnAdminTemplateBlockOnSyliusWithoutTwigHooks(): void
@@ -100,7 +120,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $events = $container->getExtensionConfig('sylius_ui');
         $fromChat = $events[1]['events']['sylius.admin.order.show.sidebar']['blocks']['fluffydiscord_chatbot_from_chat'];
 
-        self::assertSame('@FluffyDiscordSyliusHonkers/admin/order/from_chat.html.twig', $fromChat['template']);
+        self::assertSame('@FluffyDiscordSyliusHonkersPlugin/admin/order/from_chat.html.twig', $fromChat['template']);
     }
 
     public function testTheChannelSiteKeysDefaultToNone(): void
@@ -165,7 +185,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $container = new ContainerBuilder();
         $container->setParameter('kernel.environment', 'test');
         $container->setParameter('kernel.build_dir', sys_get_temp_dir());
-        $extension = (new FluffyDiscordSyliusHonkersBundle())->getContainerExtension();
+        $extension = (new FluffyDiscordSyliusHonkersPlugin())->getContainerExtension();
 
         $extension->load([[
             'channel_site_keys' => ['CZ_WEB' => 'cz-key'],
@@ -184,16 +204,109 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $container->setParameter('kernel.environment', 'test');
         $container->setParameter('kernel.build_dir', sys_get_temp_dir());
         $this->registerBundles($container, $bundleClasses);
-        $container->loadFromExtension('fluffy_discord_honkers', ['api_secret' => 'api-secret']);
-        $container->loadFromExtension('fluffy_discord_sylius_honkers', []);
+        $container->loadFromExtension('fluffy_discord_honkers', []);
+        $container->loadFromExtension('fluffy_discord_sylius_honkers_plugin',[]);
         $this->skipPassesAfterAliasing($container);
 
         $container->compile();
 
-        $siteKeyContextAlias = (string) $container->getAlias(SiteKeyContextInterface::class);
+        $credentialsProviderAlias = (string) $container->getAlias(CredentialsProviderInterface::class);
+        $channelCredentialsProviderAlias = (string) $container->getAlias(ChannelCredentialsProviderInterface::class);
         $localeContextAlias = (string) $container->getAlias(ChatbotLocaleContextInterface::class);
-        self::assertSame(ChannelSiteKeyContext::class, $siteKeyContextAlias);
+        self::assertSame(SyliusCredentialsProvider::class, $credentialsProviderAlias);
+        self::assertSame(SyliusCredentialsProvider::class, $channelCredentialsProviderAlias);
         self::assertSame(SyliusLocaleContext::class, $localeContextAlias);
+    }
+
+    /**
+     * @param class-string $channelClass
+     */
+    #[DataProvider('provideChannelClasses')]
+    public function testTheCredentialsWriterIsAliasedOnlyForAChannelModelWithTheTrait(string $channelClass, bool $isWriterExpected): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('sylius.model.channel.class', $channelClass);
+
+        (new SyliusContextAliasPass())->process($container);
+
+        $hasWriter = $container->hasAlias(CredentialsWriterInterface::class);
+        self::assertSame($isWriterExpected, $hasWriter);
+    }
+
+    /**
+     * @return iterable<string, array{class-string, bool}>
+     */
+    public static function provideChannelClasses(): iterable
+    {
+        yield 'channel with the trait' => [HonkersChannel::class, true];
+        yield 'stock channel' => [Channel::class, false];
+    }
+
+    public function testAnAppCredentialsProviderIsKeptAndServesTheSymfonyBundleToo(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setAlias(ChannelCredentialsProviderInterface::class, 'app.honkers_credentials');
+
+        (new SyliusContextAliasPass())->process($container);
+
+        $channelCredentialsProviderAlias = (string) $container->getAlias(ChannelCredentialsProviderInterface::class);
+        $credentialsProviderAlias = (string) $container->getAlias(CredentialsProviderInterface::class);
+        self::assertSame('app.honkers_credentials', $channelCredentialsProviderAlias);
+        self::assertSame('app.honkers_credentials', $credentialsProviderAlias);
+    }
+
+    public function testAnAppCredentialsProviderGetsNoChannelWriter(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('sylius.model.channel.class', HonkersChannel::class);
+        $container->setAlias(ChannelCredentialsProviderInterface::class, 'app.honkers_credentials');
+
+        (new SyliusContextAliasPass())->process($container);
+
+        self::assertFalse($container->hasAlias(CredentialsWriterInterface::class));
+    }
+
+    public function testAnAppProviderForOnlyTheSymfonyInterfaceFailsTheBuild(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setAlias(CredentialsProviderInterface::class, 'app.honkers_credentials');
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(ChannelCredentialsProviderInterface::class);
+
+        (new SyliusContextAliasPass())->process($container);
+    }
+
+    public function testTheSymfonyBundleDefaultProviderIsReplaced(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setAlias(CredentialsProviderInterface::class, EnvCredentialsProvider::class);
+
+        (new SyliusContextAliasPass())->process($container);
+
+        $credentialsProviderAlias = (string) $container->getAlias(CredentialsProviderInterface::class);
+        self::assertSame(SyliusCredentialsProvider::class, $credentialsProviderAlias);
+    }
+
+    public function testAnAppCredentialsWriterIsKept(): void
+    {
+        $container = new ContainerBuilder();
+        $container->setParameter('sylius.model.channel.class', HonkersChannel::class);
+        $container->setAlias(CredentialsWriterInterface::class, 'app.honkers_writer');
+
+        (new SyliusContextAliasPass())->process($container);
+
+        $writerAlias = (string) $container->getAlias(CredentialsWriterInterface::class);
+        self::assertSame('app.honkers_writer', $writerAlias);
+    }
+
+    public function testTheCredentialsWriterIsNotAliasedWithoutAChannelModel(): void
+    {
+        $container = new ContainerBuilder();
+
+        (new SyliusContextAliasPass())->process($container);
+
+        self::assertFalse($container->hasAlias(CredentialsWriterInterface::class));
     }
 
     /**
@@ -201,8 +314,8 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
      */
     public static function provideBundleOrders(): iterable
     {
-        yield 'Symfony bundle first' => [[FluffyDiscordHonkersBundle::class, FluffyDiscordSyliusHonkersBundle::class]];
-        yield 'Sylius bundle first' => [[FluffyDiscordSyliusHonkersBundle::class, FluffyDiscordHonkersBundle::class]];
+        yield 'Symfony bundle first' => [[FluffyDiscordHonkersBundle::class, FluffyDiscordSyliusHonkersPlugin::class]];
+        yield 'Sylius bundle first' => [[FluffyDiscordSyliusHonkersPlugin::class, FluffyDiscordHonkersBundle::class]];
     }
 
     public function testTheSiteKeyServicesWireInACompiledContainer(): void
@@ -215,10 +328,8 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         $this->registerShopServices($container);
 
         $container->setParameter('fluffydiscord_honkers.backend_url', 'https://backend.test');
-        $container->setParameter('fluffydiscord_honkers.ingest_secret', 'ingest-secret');
-        $container->setParameter('fluffydiscord_honkers.widget.site_key', 'site-key');
 
-        $bundle = new FluffyDiscordSyliusHonkersBundle();
+        $bundle = new FluffyDiscordSyliusHonkersPlugin();
         $bundle->build($container);
         $bundle->getContainerExtension()->load([[
             'channel_site_keys' => ['CZ_WEB' => 'cz-key', 'SK_WEB' => '%env(CHATBOT_TEST_SITE_KEY_SK)%'],
@@ -233,12 +344,8 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
         }
 
         $this->setShopServices($container);
-        $siteKeyResolver = $container->get(SiteKeyResolver::class);
-
-        self::assertInstanceOf(SiteKeyResolver::class, $siteKeyResolver);
-        self::assertSame('cz-key', $siteKeyResolver->getSiteKey('CZ_WEB'));
-        self::assertSame('sk-key', $siteKeyResolver->getSiteKey('SK_WEB'));
-        self::assertSame('site-key', $siteKeyResolver->getSiteKey('DE_WEB'));
+        self::assertSame(['CZ_WEB' => 'cz-key', 'SK_WEB' => 'sk-key'], $container->getParameter('fluffydiscord_sylius_honkers.channel_site_keys'));
+        self::assertInstanceOf(SiteKeyResolver::class, $container->get(SiteKeyResolver::class));
         self::assertInstanceOf(CatalogChangeNotifier::class, $container->get(CatalogChangeNotifier::class));
         self::assertInstanceOf(ChatbotWidgetRuntime::class, $container->get(ChatbotWidgetRuntime::class));
         self::assertTrue($container->getDefinition(ChatbotWidgetExtension::class)->hasTag('twig.extension'));
@@ -276,6 +383,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
             ChannelResolver::class,
             ChatbotWidgetExtension::class,
             ChatbotWidgetRuntime::class,
+            SyliusCredentialsProvider::class,
         ];
     }
 
@@ -285,7 +393,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
     private function keepOnlyWiredBundleServices(ContainerBuilder $container, array $wiredServiceIds): void
     {
         foreach (array_keys($container->getDefinitions()) as $serviceId) {
-            $isBundleService = str_starts_with($serviceId, 'FluffyDiscord\\SyliusHonkersBundle\\');
+            $isBundleService = str_starts_with($serviceId, 'FluffyDiscord\\SyliusHonkersPlugin\\');
             if (!$isBundleService) {
                 continue;
             }
@@ -312,7 +420,10 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
             WidgetSnippet::class => WidgetSnippet::class,
             LoggerInterface::class => LoggerInterface::class,
             ChannelRepositoryInterface::class => ChannelRepositoryInterface::class,
+            EnvCredentialsProvider::class => EnvCredentialsProvider::class,
+            EntityManagerInterface::class => EntityManagerInterface::class,
             ChannelContextInterface::class => ChannelContextInterface::class,
+            HostMatcher::class => HostMatcher::class,
         ];
     }
 
@@ -338,21 +449,21 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
     private function processConfiguration(array $rawConfig): array
     {
         $container = new ContainerBuilder();
-        $extension = (new FluffyDiscordSyliusHonkersBundle())->getContainerExtension();
+        $extension = (new FluffyDiscordSyliusHonkersPlugin())->getContainerExtension();
         $configuration = $extension->getConfiguration([], $container);
 
         return (new Processor())->processConfiguration($configuration, [$rawConfig]);
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string|bool>
      */
     private function getExpectedWidgetContext(): array
     {
         return [
             'backend_url' => 'https://backend.test',
-            'site_key' => 'site-key',
             'widget_cdn_url' => '',
+            'defer' => true,
         ];
     }
 
@@ -370,7 +481,7 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
 
         $container->prependExtensionConfig('fluffy_discord_honkers', [
             'backend_url' => 'https://backend.test',
-            'widget' => $widgetConfig + ['site_key' => 'site-key'],
+            'widget' => $widgetConfig,
         ]);
 
         return $container;
@@ -387,6 +498,6 @@ class FluffyDiscordSyliusHonkersBundleTest extends TestCase
             __FILE__,
         );
 
-        (new FluffyDiscordSyliusHonkersBundle())->prependExtension($configurator, $container);
+        (new FluffyDiscordSyliusHonkersPlugin())->prependExtension($configurator, $container);
     }
 }

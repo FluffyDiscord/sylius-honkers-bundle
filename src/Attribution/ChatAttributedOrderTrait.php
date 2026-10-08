@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Attribution;
+namespace FluffyDiscord\SyliusHonkersPlugin\Attribution;
 
 use Doctrine\ORM\Mapping\Column;
 

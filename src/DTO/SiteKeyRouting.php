@@ -2,27 +2,29 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\DTO;
+namespace FluffyDiscord\SyliusHonkersPlugin\DTO;
+
+use FluffyDiscord\Honkers\DTO\SiteCredentials;
 
 class SiteKeyRouting
 {
     /**
-     * @param array<string, list<string>> $siteKeysByLocale
-     * @param list<string>                $channelCodesWithoutSiteKey
-     * @param list<string>                $channelCodesWithEmptySiteKey
+     * @param array<string, list<SiteCredentials>> $siteCredentialsByLocale
+     * @param list<string>                         $channelCodesWithoutSiteKey
+     * @param list<string>                         $channelCodesWithEmptySiteKey
      */
     public function __construct(
-        public readonly array $siteKeysByLocale,
+        public readonly array $siteCredentialsByLocale,
         public readonly array $channelCodesWithoutSiteKey = [],
         public readonly array $channelCodesWithEmptySiteKey = [],
     ) {
     }
 
     /**
-     * @return list<string>
+     * @return list<SiteCredentials>
      */
-    public function getSiteKeys(string $locale): array
+    public function getSiteCredentials(string $locale): array
     {
-        return $this->siteKeysByLocale[$locale] ?? [];
+        return $this->siteCredentialsByLocale[$locale] ?? [];
     }
 }

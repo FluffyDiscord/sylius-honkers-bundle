@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Tool;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Tool;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use FluffyDiscord\Honkers\DTO\ToolCallContext;
-use FluffyDiscord\SyliusHonkersBundle\Tool\DTO\OrderStatusArguments;
-use FluffyDiscord\SyliusHonkersBundle\Tool\GetOrderStatusTool;
+use FluffyDiscord\SyliusHonkersPlugin\Tool\DTO\OrderStatusArguments;
+use FluffyDiscord\SyliusHonkersPlugin\Tool\GetOrderStatusTool;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Core\Model\CustomerInterface;
 use Sylius\Component\Core\Model\OrderInterface;

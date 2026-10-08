@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Taxon;
+namespace FluffyDiscord\SyliusHonkersPlugin\Taxon;
 
 use Doctrine\ORM\EntityRepository;
-use FluffyDiscord\SyliusHonkersBundle\Contract\ChannelTaxonRootsInterface;
-use FluffyDiscord\SyliusHonkersBundle\Exception\AmbiguousChannelTaxonTreeException;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ChannelTaxonRootsInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Exception\AmbiguousChannelTaxonTreeException;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Taxonomy\Model\TaxonInterface;
 use Sylius\Component\Taxonomy\Repository\TaxonRepositoryInterface;

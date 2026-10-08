@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Channel;
+namespace FluffyDiscord\SyliusHonkersPlugin\Channel;
 
-use FluffyDiscord\SyliusHonkersBundle\DTO\SiteKeyRouting;
+use FluffyDiscord\Honkers\DTO\SiteCredentials;
+use FluffyDiscord\SyliusHonkersPlugin\Credentials\ChannelCredentialsProviderInterface;
+use FluffyDiscord\SyliusHonkersPlugin\DTO\SiteKeyRouting;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -15,45 +17,12 @@ class SiteKeyResolver
      * @param array<array-key, string> $channelSiteKeys
      */
     public function __construct(
-        private readonly ChannelRepositoryInterface $channelRepository,
-
-        #[Autowire(param: 'fluffydiscord_honkers.widget.site_key')]
-        private readonly string $defaultSiteKey,
+        private readonly ChannelRepositoryInterface          $channelRepository,
+        private readonly ChannelCredentialsProviderInterface $credentialsProvider,
 
         #[Autowire(param: 'fluffydiscord_sylius_honkers.channel_site_keys')]
         private readonly array $channelSiteKeys,
     ) {
-    }
-
-    public function getDefaultSiteKey(): string
-    {
-        return $this->defaultSiteKey;
-    }
-
-    public function hasChannelSiteKeys(): bool
-    {
-        return $this->channelSiteKeys !== [];
-    }
-
-    public function hasAnySiteKey(): bool
-    {
-        if ($this->defaultSiteKey !== '') {
-            return true;
-        }
-
-        $configuredChannelSiteKeys = array_filter($this->channelSiteKeys, fn (string $siteKey): bool => $siteKey !== '');
-
-        return $configuredChannelSiteKeys !== [];
-    }
-
-    public function getSiteKey(string $channelCode): string
-    {
-        return $this->findChannelSiteKey($channelCode) ?? $this->defaultSiteKey;
-    }
-
-    public function findChannelSiteKey(string $channelCode): ?string
-    {
-        return $this->channelSiteKeys[$channelCode] ?? null;
     }
 
     /**
@@ -61,12 +30,7 @@ class SiteKeyResolver
      */
     public function getSiteKeyRouting(array $locales): SiteKeyRouting
     {
-        $hasChannelSiteKeys = $this->hasChannelSiteKeys();
-        if (!$hasChannelSiteKeys) {
-            return $this->getDefaultSiteKeyRouting($locales);
-        }
-
-        $siteKeysByLocale = array_fill_keys($locales, []);
+        $siteCredentialsByLocale = array_fill_keys($locales, []);
         $channelCodesWithoutSiteKey = [];
         $channelCodesWithEmptySiteKey = [];
 
@@ -77,44 +41,51 @@ class SiteKeyResolver
                 continue;
             }
 
-            $channelCode = (string) $channel->getCode();
-            $channelSiteKey = $this->findChannelSiteKey($channelCode);
-            if ($channelSiteKey === '') {
-                $channelCodesWithEmptySiteKey[] = $channelCode;
-
-                continue;
-            }
-
-            $siteKey = $channelSiteKey ?? $this->defaultSiteKey;
-            if ($siteKey === '') {
-                $channelCodesWithoutSiteKey[] = $channelCode;
+            $siteCredentials = $this->findNotifiableCredentials($channel);
+            if ($siteCredentials === null) {
+                $channelCode = (string) $channel->getCode();
+                $isOptedOut = $this->isChannelSiteKeyConfiguredEmpty($channelCode);
+                if ($isOptedOut) {
+                    $channelCodesWithEmptySiteKey[] = $channelCode;
+                } else {
+                    $channelCodesWithoutSiteKey[] = $channelCode;
+                }
 
                 continue;
             }
 
             foreach ($servedLocales as $servedLocale) {
-                $siteKeysByLocale[$servedLocale][$siteKey] = $siteKey;
+                $siteCredentialsByLocale[$servedLocale][$siteCredentials->siteKey] = $siteCredentials;
             }
         }
 
         return new SiteKeyRouting(
-            array_map(array_values(...), $siteKeysByLocale),
+            array_map(array_values(...), $siteCredentialsByLocale),
             $channelCodesWithoutSiteKey,
             $channelCodesWithEmptySiteKey,
         );
     }
 
-    /**
-     * @param list<string> $locales
-     */
-    private function getDefaultSiteKeyRouting(array $locales): SiteKeyRouting
+    private function findNotifiableCredentials(ChannelInterface $channel): ?SiteCredentials
     {
-        $siteKeys = [];
-        if ($this->defaultSiteKey !== '') {
-            $siteKeys[] = $this->defaultSiteKey;
+        $siteCredentials = $this->credentialsProvider->findForChannel($channel);
+        if ($siteCredentials === null) {
+            return null;
         }
 
-        return new SiteKeyRouting(array_fill_keys($locales, $siteKeys));
+        $hasIngestSecret = $siteCredentials->hasIngestSecret();
+        if (!$hasIngestSecret) {
+            return null;
+        }
+
+        return $siteCredentials;
+    }
+
+    private function isChannelSiteKeyConfiguredEmpty(string $channelCode): bool
+    {
+        $configuredSiteKey = $this->channelSiteKeys[$channelCode] ?? null;
+
+        return $configuredSiteKey === '';
     }
 
     /**

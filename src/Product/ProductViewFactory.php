@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Product;
+namespace FluffyDiscord\SyliusHonkersPlugin\Product;
 
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
-use FluffyDiscord\SyliusHonkersBundle\Contract\ProductViewFactoryInterface;
-use FluffyDiscord\SyliusHonkersBundle\DTO\ProductItem;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelUrlGenerator;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ProductViewFactoryInterface;
+use FluffyDiscord\SyliusHonkersPlugin\DTO\ProductItem;
 use Liip\ImagineBundle\Imagine\Cache\CacheManager;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelInterface;

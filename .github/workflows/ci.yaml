@@ -1,0 +1,35 @@
+name: CI
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    tests:
+        name: PHP ${{ matrix.php }}, Sylius ${{ matrix.sylius }}
+        runs-on: ubuntu-latest
+
+        strategy:
+            fail-fast: false
+            matrix:
+                php: ['8.2', '8.4']
+                sylius: ['~1.14.0', '~2.2.0']
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ matrix.php }}
+                  extensions: intl
+                  coverage: none
+
+            - run: composer validate --strict
+
+            - name: Use the Sylius 1 line of Monsieur Biz CMS
+              if: matrix.sylius == '~1.14.0'
+              run: composer require --dev --no-update monsieurbiz/sylius-cms-page-plugin:^1.2
+
+            - run: composer update --with sylius/sylius:${{ matrix.sylius }} --no-interaction --no-progress --prefer-dist
+
+            - run: vendor/bin/phpunit

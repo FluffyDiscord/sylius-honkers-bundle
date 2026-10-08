@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures;
 
-use FluffyDiscord\SyliusHonkersBundle\Contract\ChannelTaxonRootsInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ChannelTaxonRootsInterface;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Taxonomy\Model\TaxonInterface;
 

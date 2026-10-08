@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Locale;
+namespace FluffyDiscord\SyliusHonkersPlugin\Locale;
 
 use FluffyDiscord\Honkers\Contract\ChatbotLocaleContextInterface;
 use FluffyDiscord\Honkers\Locale\LocaleMatcher;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
 use Sylius\Component\Locale\Context\LocaleContextInterface;
 use Sylius\Component\Locale\Model\LocaleInterface;
 

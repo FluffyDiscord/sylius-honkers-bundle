@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\EventListener;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\EventListener;
 
 use FluffyDiscord\Honkers\Telemetry\ClickId;
-use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatClickSession;
-use FluffyDiscord\SyliusHonkersBundle\EventListener\ChatClickLandingListener;
+use FluffyDiscord\SyliusHonkersPlugin\Attribution\ChatClickSession;
+use FluffyDiscord\SyliusHonkersPlugin\EventListener\ChatClickLandingListener;
 use PHPUnit\Framework\TestCase;
 use Sylius\Bundle\ResourceBundle\Event\ResourceControllerEvent;
 use Sylius\Component\Core\Model\Product;

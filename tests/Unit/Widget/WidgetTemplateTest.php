@@ -2,16 +2,13 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Widget;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Widget;
 
 use FluffyDiscord\Honkers\Widget\WidgetSnippet;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetExtension;
-use FluffyDiscord\SyliusHonkersBundle\Twig\ChatbotWidgetRuntime;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelCredentialsProviderDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Twig\ChatbotWidgetExtension;
+use FluffyDiscord\SyliusHonkersPlugin\Twig\ChatbotWidgetRuntime;
 use PHPUnit\Framework\TestCase;
-use Sylius\Component\Channel\Context\ChannelContextInterface;
-use Sylius\Component\Channel\Context\ChannelNotFoundException;
-use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 use Twig\RuntimeLoader\FactoryRuntimeLoader;
@@ -45,10 +42,8 @@ class WidgetTemplateTest extends TestCase
         $twig = new Environment($loader);
         $twig->addExtension(new ChatbotWidgetExtension());
 
-        $channelContext = $this->createStub(ChannelContextInterface::class);
-        $channelContext->method('getChannel')->willThrowException(new ChannelNotFoundException());
-        $siteKeyResolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), 'pk_test', []);
-        $runtime = new ChatbotWidgetRuntime($channelContext, $siteKeyResolver, new WidgetSnippet());
+        $credentialsProvider = new ChannelCredentialsProviderDouble(currentSiteKey: 'pk_test');
+        $runtime = new ChatbotWidgetRuntime($credentialsProvider, new WidgetSnippet());
         $twig->addRuntimeLoader(new FactoryRuntimeLoader([
             ChatbotWidgetRuntime::class => fn (): ChatbotWidgetRuntime => $runtime,
         ]));
@@ -56,7 +51,6 @@ class WidgetTemplateTest extends TestCase
         return $twig->render('shop/widget.html.twig', [
             'app' => ['locale' => 'cs_CZ'],
             'backend_url' => 'https://chat.example.com',
-            'site_key' => 'pk_test',
             'widget_cdn_url' => $widgetCdnUrl,
         ]);
     }

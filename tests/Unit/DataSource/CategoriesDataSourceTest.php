@@ -2,24 +2,24 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\DataSource;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\DataSource;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
 use Doctrine\ORM\Query\Parameter;
 use Doctrine\ORM\QueryBuilder;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
-use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelUrlGenerator;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ProductIndexabilityInterface;
 use FluffyDiscord\Honkers\Cursor\CursorCodec;
-use FluffyDiscord\SyliusHonkersBundle\DataSource\CategoriesDataSource;
+use FluffyDiscord\SyliusHonkersPlugin\DataSource\CategoriesDataSource;
 use FluffyDiscord\Honkers\DTO\SourceQuery;
 use FluffyDiscord\Honkers\Enum\DocumentKind;
-use FluffyDiscord\SyliusHonkersBundle\Exception\AmbiguousChannelTaxonTreeException;
-use FluffyDiscord\SyliusHonkersBundle\Contract\ChannelTaxonRootsInterface;
-use FluffyDiscord\SyliusHonkersBundle\Taxon\ChannelTaxonRoots;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\SharedTaxonRoots;
+use FluffyDiscord\SyliusHonkersPlugin\Exception\AmbiguousChannelTaxonTreeException;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ChannelTaxonRootsInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Taxon\ChannelTaxonRoots;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\SharedTaxonRoots;
 use FluffyDiscord\Honkers\Text\HtmlToText;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;

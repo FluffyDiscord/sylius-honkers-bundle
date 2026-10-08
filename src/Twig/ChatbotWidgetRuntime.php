@@ -2,48 +2,34 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Twig;
+namespace FluffyDiscord\SyliusHonkersPlugin\Twig;
 
 use FluffyDiscord\Honkers\Widget\WidgetSnippet;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use Sylius\Component\Channel\Context\ChannelContextInterface;
-use Sylius\Component\Channel\Context\ChannelNotFoundException;
+use FluffyDiscord\SyliusHonkersPlugin\Credentials\ChannelCredentialsProviderInterface;
 use Twig\Extension\RuntimeExtensionInterface;
 
 class ChatbotWidgetRuntime implements RuntimeExtensionInterface
 {
     public function __construct(
-        private readonly ChannelContextInterface $channelContext,
-        private readonly SiteKeyResolver         $siteKeyResolver,
-        private readonly WidgetSnippet           $widgetSnippet,
+        private readonly ChannelCredentialsProviderInterface $credentialsProvider,
+        private readonly WidgetSnippet                       $widgetSnippet,
     ) {
     }
 
-    public function getSiteKey(?string $fallbackSiteKey): string
+    public function getSiteKey(): string
     {
-        $fallback = (string) $fallbackSiteKey;
+        $currentSite = $this->credentialsProvider->findCurrentSite();
 
-        $channelCode = $this->findChannelCode();
-        if ($channelCode === null) {
-            return $fallback;
-        }
-
-        return $this->siteKeyResolver->findChannelSiteKey($channelCode) ?? $fallback;
+        return $currentSite?->siteKey ?? '';
     }
 
-    public function renderWidgetMarkup(?string $backendUrl, string $siteKey, ?string $cdnUrl, ?string $locale): string
-    {
-        return $this->widgetSnippet->render((string) $backendUrl, $siteKey, (string) $cdnUrl, (string) $locale);
-    }
-
-    private function findChannelCode(): ?string
-    {
-        try {
-            $channel = $this->channelContext->getChannel();
-        } catch (ChannelNotFoundException) {
-            return null;
-        }
-
-        return $channel->getCode();
+    public function renderWidgetMarkup(
+        ?string $backendUrl,
+        string $siteKey,
+        ?string $cdnUrl,
+        ?string $locale,
+        bool $defer = true,
+    ): string {
+        return $this->widgetSnippet->render((string) $backendUrl, $siteKey, (string) $cdnUrl, (string) $locale, $defer);
     }
 }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Twig;
+namespace FluffyDiscord\SyliusHonkersPlugin\Twig;
 
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Locale;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Locale;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use FluffyDiscord\Honkers\Locale\LocaleMatcher;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusHonkersBundle\Locale\SyliusLocaleContext;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChannelFixtureFactory;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Locale\SyliusLocaleContext;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelFixtureFactory;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Locale\Context\LocaleContextInterface;

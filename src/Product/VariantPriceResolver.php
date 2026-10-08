@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Product;
+namespace FluffyDiscord\SyliusHonkersPlugin\Product;
 
 use Sylius\Component\Core\Calculator\ProductVariantPricesCalculatorInterface;
 use Sylius\Component\Core\Exception\MissingChannelConfigurationException;

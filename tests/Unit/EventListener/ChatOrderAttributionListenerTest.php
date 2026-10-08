@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\EventListener;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\EventListener;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use FluffyDiscord\Honkers\DTO\ChatOrder;
+use FluffyDiscord\Honkers\DTO\SiteCredentials;
 use FluffyDiscord\Honkers\Exception\TelemetryException;
 use FluffyDiscord\Honkers\Telemetry\TelemetryClient;
 use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
-use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatClickSession;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\EventListener\ChatOrderAttributionListener;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChatAttributedOrder;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingLogger;
+use FluffyDiscord\SyliusHonkersPlugin\Attribution\ChatClickSession;
+use FluffyDiscord\SyliusHonkersPlugin\EventListener\ChatOrderAttributionListener;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelCredentialsProviderDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChatAttributedOrder;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LogLevel;
 use Sylius\Bundle\ResourceBundle\Event\ResourceControllerEvent;
-use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
 use Sylius\Component\Core\Model\Channel;
 use Sylius\Component\Core\Model\OrderInterface;
 use Sylius\Component\Core\Model\OrderItemInterface;
@@ -48,19 +48,20 @@ class ChatOrderAttributionListenerTest extends TestCase
         $this->logger = new RecordingLogger();
     }
 
-    private function createListener(?TelemetryClient $telemetryClient = null): ChatOrderAttributionListener
-    {
-        $siteKeyResolver = new SiteKeyResolver(
-            $this->createStub(ChannelRepositoryInterface::class),
-            'default-key',
-            ['CZ_WEB' => 'cz-key'],
+    private function createListener(
+        ?TelemetryClient $telemetryClient = null,
+        string $ingestSecret = 'ingest-secret',
+    ): ChatOrderAttributionListener {
+        $credentialsProvider = new ChannelCredentialsProviderDouble(
+            ['CZ_WEB' => 'cz-key', 'DE_WEB' => 'de-key'],
+            ingestSecret: $ingestSecret,
         );
 
         return new ChatOrderAttributionListener(
             $this->chatClickSession,
             $telemetryClient ?? $this->createRecordingTelemetryClient(),
-            $siteKeyResolver,
-            new BackendReportGuard($this->logger, 'https://backend.example', 'ingest-secret', 'prod'),
+            $credentialsProvider,
+            new BackendReportGuard($this->logger, 'https://backend.example', 'prod'),
             $this->logger,
         );
     }
@@ -68,8 +69,8 @@ class ChatOrderAttributionListenerTest extends TestCase
     private function createRecordingTelemetryClient(): TelemetryClient
     {
         $telemetryClient = $this->createStub(TelemetryClient::class);
-        $telemetryClient->method('reportOrder')->willReturnCallback(function (string $siteKey, ChatOrder $order): void {
-            $this->reports[] = ['siteKey' => $siteKey, 'order' => $order];
+        $telemetryClient->method('reportOrder')->willReturnCallback(function (SiteCredentials $siteCredentials, ChatOrder $order): void {
+            $this->reports[] = ['siteKey' => $siteCredentials->siteKey, 'order' => $order];
         });
 
         return $telemetryClient;
@@ -107,6 +108,17 @@ class ChatOrderAttributionListenerTest extends TestCase
         $item->method('getTotal')->willReturn($total);
 
         return $item;
+    }
+
+    public function testASiteWithoutAnIngestSecretReportsNothing(): void
+    {
+        $listener = $this->createListener(ingestSecret: '');
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 129900]));
+        $listener->reportOrders();
+
+        self::assertSame([], $this->reports);
     }
 
     public function testOnlyTheMatchingItemTotalIsReportedOnTerminate(): void
@@ -180,7 +192,18 @@ class ChatOrderAttributionListenerTest extends TestCase
         $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 129900], 'EUR', 'DE_WEB'));
         $listener->reportOrders();
 
-        self::assertSame('default-key', $this->reports[0]['siteKey']);
+        self::assertSame('de-key', $this->reports[0]['siteKey']);
+    }
+
+    public function testAnOrderOfAChannelWithoutASiteIsNotReported(): void
+    {
+        $listener = $this->createListener();
+        $this->chatClickSession->remember('CLIPPER', 'click-1');
+
+        $listener->attributeOrder($this->createCompletedOrderEvent(['CLIPPER' => 129900], 'EUR', 'SK_WEB'));
+        $listener->reportOrders();
+
+        self::assertSame([], $this->reports);
     }
 
     public function testATelemetryFailureIsLoggedAndSwallowed(): void

@@ -1,8 +1,8 @@
 {
-    "name": "fluffydiscord/sylius-honkers-bundle",
+    "name": "fluffydiscord/sylius-honkers-plugin",
     "description": "Plug-and-play Sylius wrapper for the Honkers chatbot tool-server: default tools, data sources and shop widget",
-    "type": "symfony-bundle",
-    "license": "proprietary",
+    "type": "sylius-plugin",
+    "license": "MIT",
     "minimum-stability": "dev",
     "prefer-stable": true,
     "require": {
@@ -11,8 +11,8 @@
         "doctrine/collections": "^1.8 || ^2.1",
         "doctrine/doctrine-bundle": "^2.13 || ^3.2 || ^4.0",
         "doctrine/orm": "^2.20 || ^3.6 || ^4.0",
-        "fluffydiscord/honkers-sdk": "^1.2",
-        "fluffydiscord/symfony-honkers-bundle": "^1.2",
+        "fluffydiscord/honkers-sdk": "^2.0",
+        "fluffydiscord/symfony-honkers-bundle": "^2.0",
         "liip/imagine-bundle": "^2.13",
         "sylius/sylius": "^1.14 || ^2.2 || ^2.3@alpha",
         "symfony/config": "^6.4 || ^7.0 || ^8.0",
@@ -33,12 +33,12 @@
     },
     "autoload": {
         "psr-4": {
-            "FluffyDiscord\\SyliusHonkersBundle\\": "src/"
+            "FluffyDiscord\\SyliusHonkersPlugin\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "FluffyDiscord\\SyliusHonkersBundle\\Tests\\": "tests/"
+            "FluffyDiscord\\SyliusHonkersPlugin\\Tests\\": "tests/"
         }
     },
     "config": {

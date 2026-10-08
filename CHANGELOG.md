@@ -1,5 +1,40 @@
 # Changelog
 
+## v2.0.0 - Unreleased
+
+Upgrade steps → [UPGRADE-2.0.md](UPGRADE-2.0.md).
+
+### BC breaks
+
+- Renamed to `fluffydiscord/sylius-honkers-plugin`: namespace `FluffyDiscord\SyliusHonkersPlugin\`, bundle class
+  `FluffyDiscordSyliusHonkersPlugin`, config root `fluffy_discord_sylius_honkers_plugin`, template namespace
+  `@FluffyDiscordSyliusHonkersPlugin`.
+- Requires `fluffydiscord/honkers-sdk` ^2.0 and `fluffydiscord/symfony-honkers-bundle` ^2.0: `api_secret`,
+  `ingest_secret` and `widget.site_key` are no longer config options; the credentials come from
+  `CHATBOT_API_SECRET`, `CHATBOT_INGEST_SECRET` and `CHATBOT_SITE_KEY`, or from your own provider.
+- `ChannelSiteKeyContext` removed. `SiteKeyResolver` keeps only `getSiteKeyRouting()`; `SiteKeyRouting` carries
+  `SiteCredentials`. `fluffydiscord_chatbot_site_key()` takes no argument.
+- Catalog notifications always go to the enabled channels serving the locale, also without `channel_site_keys`; a
+  locale no enabled channel serves is no longer sent. `notify-all` refuses a disabled channel in every setup.
+- A site key without an ingest secret still renders the widget; notifications, order reports and `notify-all` skip
+  that channel.
+- `ChannelCredentialsProviderInterface` must be aliased on Sylius: aliasing only the Symfony bundle's
+  `CredentialsProviderInterface` fails the container build.
+- `ChannelCredentialsProviderInterface::findForChannel()` and `CatalogChangeNotifier::notify()` take the loaded
+  `ChannelInterface` instead of a channel code.
+- An own `ChannelCredentialsProviderInterface` gets no channel writer: Connect stores into it only when you alias
+  `CredentialsWriterInterface` yourself.
+
+### Added
+
+- Connect from the dashboard. Add `HonkersChannelInterface` + `HonkersChannelTrait` to your `Channel` and migrate:
+  Connect generates the secrets, stores them on the channel and the widget, notifications and reports use them at
+  once. Unpaired channels keep their configured credentials. Channels on different hosts pair together when every
+  hostname is on a verified domain of the website.
+- `ChannelCredentialsProviderInterface` — alias it to load the credentials from your own store.
+- `widget.defer` (Symfony bundle) — `false` loads `chat.js` without `defer`.
+- MIT license, GitHub Actions CI on PHP 8.2 / 8.4 × Sylius 1.14 / 2.2.
+
 ## v1.5.1 - 2026-10-07
 
 ### Fixed

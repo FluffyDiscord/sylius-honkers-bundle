@@ -2,17 +2,20 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Ingest;
+namespace FluffyDiscord\SyliusHonkersPlugin\Ingest;
 
 use FluffyDiscord\Honkers\DTO\CatalogChange;
 use FluffyDiscord\Honkers\DTO\CatalogChangeResult;
+use FluffyDiscord\Honkers\DTO\SiteCredentials;
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Exception\CatalogIngestException;
 use FluffyDiscord\Honkers\Ingest\CatalogIngestClient;
 use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
-use FluffyDiscord\SyliusHonkersBundle\DTO\SiteKeyRouting;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Credentials\ChannelCredentialsProviderInterface;
+use FluffyDiscord\SyliusHonkersPlugin\DTO\SiteKeyRouting;
 use Psr\Log\LoggerInterface;
+use Sylius\Component\Channel\Model\ChannelInterface;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -26,10 +29,11 @@ class CatalogChangeNotifier implements ResetInterface
     private bool $hasLoggedOverflow = false;
 
     public function __construct(
-        private readonly CatalogIngestClient $catalogIngestClient,
-        private readonly LoggerInterface     $logger,
-        private readonly SiteKeyResolver     $siteKeyResolver,
-        private readonly BackendReportGuard  $backendReportGuard,
+        private readonly CatalogIngestClient                 $catalogIngestClient,
+        private readonly LoggerInterface                     $logger,
+        private readonly SiteKeyResolver                     $siteKeyResolver,
+        private readonly ChannelCredentialsProviderInterface $credentialsProvider,
+        private readonly BackendReportGuard                  $backendReportGuard,
     ) {
     }
 
@@ -48,13 +52,7 @@ class CatalogChangeNotifier implements ResetInterface
      */
     public function getMissingConfigurationKeys(): array
     {
-        $missingKeys = $this->backendReportGuard->getMissingBackendConfigurationKeys();
-        $hasAnySiteKey = $this->siteKeyResolver->hasAnySiteKey();
-        if (!$hasAnySiteKey) {
-            $missingKeys[] = 'widget.site_key or channel_site_keys';
-        }
-
-        return $missingKeys;
+        return $this->backendReportGuard->getMissingBackendConfigurationKeys();
     }
 
     public function collect(CatalogSourceName $source, string $locale, string $externalId): void
@@ -91,8 +89,8 @@ class CatalogChangeNotifier implements ResetInterface
             return;
         }
 
-        $isConfigured = $this->isConfigured();
-        if (!$isConfigured) {
+        $canReport = $this->canReport();
+        if (!$canReport) {
             return;
         }
 
@@ -115,26 +113,21 @@ class CatalogChangeNotifier implements ResetInterface
         CatalogSourceName $source,
         string $locale,
         array $externalIds,
-        ?string $channelCode = null,
+        ?ChannelInterface $channel = null,
     ): CatalogChangeResult {
         if ($externalIds === []) {
             return new CatalogChangeResult(true);
         }
 
-        $isConfigured = $this->isConfigured();
-        if (!$isConfigured) {
-            return new CatalogChangeResult(false);
-        }
-
-        $siteKey = $this->resolveSiteKey($channelCode);
-        if ($siteKey === '') {
-            $this->logMissingSiteKey($channelCode);
-
-            return new CatalogChangeResult(false);
-        }
-
-        $canReport = $this->canReport($siteKey);
+        $canReport = $this->canReport();
         if (!$canReport) {
+            return new CatalogChangeResult(false);
+        }
+
+        $siteCredentials = $this->findSiteCredentials($channel);
+        if ($siteCredentials === null) {
+            $this->logMissingSiteKey($channel);
+
             return new CatalogChangeResult(false);
         }
 
@@ -143,7 +136,7 @@ class CatalogChangeNotifier implements ResetInterface
         $retryAfterSeconds = null;
 
         foreach ($batches as $batch) {
-            $result = $this->sendToSite($source, $locale, $batch, $siteKey);
+            $result = $this->sendToSite($source, $locale, $batch, $siteCredentials);
             if (!$result->accepted) {
                 $accepted = false;
             }
@@ -171,14 +164,9 @@ class CatalogChangeNotifier implements ResetInterface
         foreach ($pendingChanges as $change) {
             $externalIds = array_keys($change['externalIds']);
             $batches = array_chunk($externalIds, $maxExternalIds);
-            foreach ($siteKeyRouting->getSiteKeys($change['locale']) as $siteKey) {
-                $canReport = $this->canReport($siteKey);
-                if (!$canReport) {
-                    continue;
-                }
-
+            foreach ($siteKeyRouting->getSiteCredentials($change['locale']) as $siteCredentials) {
                 foreach ($batches as $batch) {
-                    $this->sendToSite($change['source'], $change['locale'], $batch, $siteKey);
+                    $this->sendToSite($change['source'], $change['locale'], $batch, $siteCredentials);
                 }
             }
         }
@@ -187,12 +175,16 @@ class CatalogChangeNotifier implements ResetInterface
     /**
      * @param list<string> $externalIds
      */
-    private function sendToSite(CatalogSourceName $source, string $locale, array $externalIds, string $siteKey): CatalogChangeResult
-    {
+    private function sendToSite(
+        CatalogSourceName $source,
+        string $locale,
+        array $externalIds,
+        SiteCredentials $siteCredentials,
+    ): CatalogChangeResult {
         try {
-            return $this->catalogIngestClient->send($siteKey, new CatalogChange($source, $locale, $externalIds));
+            return $this->catalogIngestClient->send($siteCredentials, new CatalogChange($source, $locale, $externalIds));
         } catch (CatalogIngestException $exception) {
-            $this->logFailure($source, $locale, $siteKey, $exception);
+            $this->logFailure($source, $locale, $siteCredentials->siteKey, $exception);
 
             return new CatalogChangeResult(false);
         }
@@ -220,25 +212,40 @@ class CatalogChangeNotifier implements ResetInterface
         ]);
     }
 
-    private function resolveSiteKey(?string $channelCode): string
+    private function findSiteCredentials(?ChannelInterface $channel): ?SiteCredentials
     {
-        if ($channelCode === null) {
-            return $this->siteKeyResolver->getDefaultSiteKey();
+        $siteCredentials = $this->findChannelOrCurrentSiteCredentials($channel);
+        if ($siteCredentials === null) {
+            return null;
         }
 
-        return $this->siteKeyResolver->getSiteKey($channelCode);
+        $hasIngestSecret = $siteCredentials->hasIngestSecret();
+        if (!$hasIngestSecret) {
+            return null;
+        }
+
+        return $siteCredentials;
     }
 
-    private function logMissingSiteKey(?string $channelCode): void
+    private function findChannelOrCurrentSiteCredentials(?ChannelInterface $channel): ?SiteCredentials
     {
-        if ($channelCode === null) {
-            $this->logger->warning('Chatbot: no default site key is configured, skipping the catalog notification.');
+        if ($channel === null) {
+            return $this->credentialsProvider->findCurrentSite();
+        }
+
+        return $this->credentialsProvider->findForChannel($channel);
+    }
+
+    private function logMissingSiteKey(?ChannelInterface $channel): void
+    {
+        if ($channel === null) {
+            $this->logger->warning('Chatbot: the current channel has no site key or ingest secret, skipping the catalog notification.');
 
             return;
         }
 
-        $this->logger->warning('Chatbot: the channel has no site key, skipping the catalog notification.', [
-            'channelCode' => $channelCode,
+        $this->logger->warning('Chatbot: the channel has no site key or ingest secret, skipping the catalog notification.', [
+            'channelCode' => $channel->getCode(),
         ]);
     }
 
@@ -258,7 +265,7 @@ class CatalogChangeNotifier implements ResetInterface
     private function logSkippedChannels(SiteKeyRouting $siteKeyRouting): void
     {
         foreach ($siteKeyRouting->channelCodesWithoutSiteKey as $channelCode) {
-            $this->logger->warning('Chatbot: the channel has no site key, skipping its catalog notifications.', [
+            $this->logger->warning('Chatbot: the channel has no site key or ingest secret, skipping its catalog notifications.', [
                 'channelCode' => $channelCode,
             ]);
         }
@@ -278,15 +285,8 @@ class CatalogChangeNotifier implements ResetInterface
         ]);
     }
 
-    private function isConfigured(): bool
+    private function canReport(): bool
     {
-        $missingKeys = $this->getMissingConfigurationKeys();
-
-        return $missingKeys === [];
-    }
-
-    private function canReport(string $siteKey): bool
-    {
-        return $this->backendReportGuard->canReport($siteKey, 'catalog change');
+        return $this->backendReportGuard->canReport('catalog change');
     }
 }

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\EventListener;
+namespace FluffyDiscord\SyliusHonkersPlugin\EventListener;
 
 use FluffyDiscord\Honkers\Telemetry\ClickId;
-use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatClickSession;
+use FluffyDiscord\SyliusHonkersPlugin\Attribution\ChatClickSession;
 use Sylius\Bundle\ResourceBundle\Event\ResourceControllerEvent;
 use Sylius\Component\Core\Model\ProductInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;

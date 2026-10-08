@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tool\DTO;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tool\DTO;
 
 use Symfony\Component\Validator\Constraints as Assert;
 

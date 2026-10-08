@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures;
 
 use Sylius\Component\Core\Model\Channel;
 use Sylius\Component\Locale\Model\Locale;

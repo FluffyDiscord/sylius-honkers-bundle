@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Attribution;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Attribution;
 
-use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatClickSession;
+use FluffyDiscord\SyliusHonkersPlugin\Attribution\ChatClickSession;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;

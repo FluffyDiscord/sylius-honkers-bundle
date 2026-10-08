@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Exception;
+namespace FluffyDiscord\SyliusHonkersPlugin\Exception;
 
 use FluffyDiscord\Honkers\Enum\ApiErrorCode;
 use FluffyDiscord\Honkers\Exception\ChatbotApiException;

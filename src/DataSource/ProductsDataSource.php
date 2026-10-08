@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\DataSource;
+namespace FluffyDiscord\SyliusHonkersPlugin\DataSource;
 
 use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Query\Expr\Join;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
 use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
-use FluffyDiscord\SyliusHonkersBundle\Contract\ProductIndexabilityInterface;
-use FluffyDiscord\SyliusHonkersBundle\Contract\ProductViewFactoryInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ProductIndexabilityInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Contract\ProductViewFactoryInterface;
 use FluffyDiscord\Honkers\Cursor\CursorCodec;
 use FluffyDiscord\Honkers\DTO\DocumentPage;
 use FluffyDiscord\Honkers\DTO\SourceDefinition;

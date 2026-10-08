@@ -2,14 +2,15 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\EventListener;
+namespace FluffyDiscord\SyliusHonkersPlugin\EventListener;
 
 use FluffyDiscord\Honkers\DTO\ChatOrder;
+use FluffyDiscord\Honkers\DTO\SiteCredentials;
 use FluffyDiscord\Honkers\Telemetry\TelemetryClient;
 use FluffyDiscord\HonkersBundle\Reporting\BackendReportGuard;
-use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatAttributedOrderInterface;
-use FluffyDiscord\SyliusHonkersBundle\Attribution\ChatClickSession;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Attribution\ChatAttributedOrderInterface;
+use FluffyDiscord\SyliusHonkersPlugin\Attribution\ChatClickSession;
+use FluffyDiscord\SyliusHonkersPlugin\Credentials\ChannelCredentialsProviderInterface;
 use Psr\Log\LoggerInterface;
 use Sylius\Bundle\ResourceBundle\Event\ResourceControllerEvent;
 use Sylius\Component\Core\Model\OrderInterface;
@@ -20,15 +21,15 @@ use Symfony\Contracts\Service\ResetInterface;
 
 class ChatOrderAttributionListener implements ResetInterface
 {
-    /** @var list<array{siteKey: string, order: ChatOrder}> */
+    /** @var list<array{siteCredentials: SiteCredentials, order: ChatOrder}> */
     private array $pendingOrders = [];
 
     public function __construct(
-        private readonly ChatClickSession   $chatClickSession,
-        private readonly TelemetryClient    $telemetryClient,
-        private readonly SiteKeyResolver    $siteKeyResolver,
-        private readonly BackendReportGuard $backendReportGuard,
-        private readonly LoggerInterface    $logger,
+        private readonly ChatClickSession                    $chatClickSession,
+        private readonly TelemetryClient                     $telemetryClient,
+        private readonly ChannelCredentialsProviderInterface $credentialsProvider,
+        private readonly BackendReportGuard                  $backendReportGuard,
+        private readonly LoggerInterface                     $logger,
     ) {
     }
 
@@ -67,13 +68,17 @@ class ChatOrderAttributionListener implements ResetInterface
             return;
         }
 
-        $siteKey = $this->resolveSiteKey($order);
-        $canReport = $this->backendReportGuard->canReport($siteKey, 'chat order');
+        $siteCredentials = $this->findSiteCredentials($order);
+        if ($siteCredentials === null) {
+            return;
+        }
+
+        $canReport = $this->backendReportGuard->canReport('chat order');
         if (!$canReport) {
             return;
         }
 
-        $this->queueOrders($order, $revenueByClickId, $siteKey);
+        $this->queueOrders($order, $revenueByClickId, $siteCredentials);
     }
 
     #[AsEventListener(event: KernelEvents::TERMINATE)]
@@ -83,7 +88,7 @@ class ChatOrderAttributionListener implements ResetInterface
         $this->reset();
 
         foreach ($pendingOrders as $pendingOrder) {
-            $this->reportOrder($pendingOrder['siteKey'], $pendingOrder['order']);
+            $this->reportOrder($pendingOrder['siteCredentials'], $pendingOrder['order']);
         }
     }
 
@@ -150,7 +155,7 @@ class ChatOrderAttributionListener implements ResetInterface
     /**
      * @param array<string, int> $revenueByClickId
      */
-    private function queueOrders(OrderInterface $order, array $revenueByClickId, string $siteKey): void
+    private function queueOrders(OrderInterface $order, array $revenueByClickId, SiteCredentials $siteCredentials): void
     {
         $orderNumber = (string) $order->getNumber();
         $currency = (string) $order->getCurrencyCode();
@@ -158,7 +163,7 @@ class ChatOrderAttributionListener implements ResetInterface
         foreach ($revenueByClickId as $clickId => $syliusRevenue) {
             $revenue = $this->convertToMinorUnits($syliusRevenue, $currency);
             $chatOrder = new ChatOrder((string) $clickId, $orderNumber, $revenue, $currency);
-            $this->pendingOrders[] = ['siteKey' => $siteKey, 'order' => $chatOrder];
+            $this->pendingOrders[] = ['siteCredentials' => $siteCredentials, 'order' => $chatOrder];
         }
     }
 
@@ -171,10 +176,10 @@ class ChatOrderAttributionListener implements ResetInterface
         return (int) round($minorUnits);
     }
 
-    private function reportOrder(string $siteKey, ChatOrder $order): void
+    private function reportOrder(SiteCredentials $siteCredentials, ChatOrder $order): void
     {
         try {
-            $this->telemetryClient->reportOrder($siteKey, $order);
+            $this->telemetryClient->reportOrder($siteCredentials, $order);
         } catch (\Throwable $exception) {
             $this->logger->warning('Chatbot: reporting the order from a chat link failed.', [
                 'orderNumber' => $order->orderNumber,
@@ -183,15 +188,28 @@ class ChatOrderAttributionListener implements ResetInterface
         }
     }
 
-    private function resolveSiteKey(OrderInterface $order): string
+    private function findSiteCredentials(OrderInterface $order): ?SiteCredentials
+    {
+        $siteCredentials = $this->findOrderSiteCredentials($order);
+        if ($siteCredentials === null) {
+            return null;
+        }
+
+        $hasIngestSecret = $siteCredentials->hasIngestSecret();
+        if (!$hasIngestSecret) {
+            return null;
+        }
+
+        return $siteCredentials;
+    }
+
+    private function findOrderSiteCredentials(OrderInterface $order): ?SiteCredentials
     {
         $channel = $order->getChannel();
         if ($channel === null) {
-            return $this->siteKeyResolver->getDefaultSiteKey();
+            return $this->credentialsProvider->findCurrentSite();
         }
 
-        $channelCode = (string) $channel->getCode();
-
-        return $this->siteKeyResolver->getSiteKey($channelCode);
+        return $this->credentialsProvider->findForChannel($channel);
     }
 }

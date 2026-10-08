@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\DataSource;
+namespace FluffyDiscord\SyliusHonkersPlugin\DataSource;
 
 use BitBag\SyliusCmsPlugin\Entity\PageInterface;
 use BitBag\SyliusCmsPlugin\Entity\PageTranslationInterface;
@@ -10,8 +10,8 @@ use BitBag\SyliusCmsPlugin\Repository\PageRepositoryInterface;
 use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Query\Expr\Join;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelUrlGenerator;
 use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
 use FluffyDiscord\Honkers\Cursor\CursorCodec;
 use FluffyDiscord\Honkers\DTO\DocumentPage;

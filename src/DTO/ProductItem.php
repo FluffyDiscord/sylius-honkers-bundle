@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\DTO;
+namespace FluffyDiscord\SyliusHonkersPlugin\DTO;
 
 class ProductItem implements \JsonSerializable
 {

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle;
+namespace FluffyDiscord\SyliusHonkersPlugin;
 
 use BitBag\SyliusCmsPlugin\Entity\Page as BitBagPage;
-use FluffyDiscord\SyliusHonkersBundle\DataSource\BitBagCmsPagesDataSource;
-use FluffyDiscord\SyliusHonkersBundle\DataSource\CmsPagesDataSource;
-use FluffyDiscord\SyliusHonkersBundle\DependencyInjection\Compiler\SyliusContextAliasPass;
+use FluffyDiscord\SyliusHonkersPlugin\DataSource\BitBagCmsPagesDataSource;
+use FluffyDiscord\SyliusHonkersPlugin\DataSource\CmsPagesDataSource;
+use FluffyDiscord\SyliusHonkersPlugin\DependencyInjection\Compiler\SyliusContextAliasPass;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\Page;
 use Sylius\Bundle\UiBundle\Registry\TemplateBlock;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -17,7 +17,7 @@ use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
-class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
+class FluffyDiscordSyliusHonkersPlugin extends AbstractBundle
 {
     public function build(ContainerBuilder $container): void
     {
@@ -99,7 +99,7 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
             'hooks' => [
                 'sylius_admin.order.show.content.sections#right' => [
                     'fluffydiscord_chatbot_from_chat' => [
-                        'template' => '@FluffyDiscordSyliusHonkers/admin/order/show/from_chat.html.twig',
+                        'template' => '@FluffyDiscordSyliusHonkersPlugin/admin/order/show/from_chat.html.twig',
                         'priority' => -100,
                     ],
                 ],
@@ -114,7 +114,7 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
                 'sylius.admin.order.show.sidebar' => [
                     'blocks' => [
                         'fluffydiscord_chatbot_from_chat' => [
-                            'template' => '@FluffyDiscordSyliusHonkers/admin/order/from_chat.html.twig',
+                            'template' => '@FluffyDiscordSyliusHonkersPlugin/admin/order/from_chat.html.twig',
                             'priority' => -100,
                         ],
                     ],
@@ -132,8 +132,8 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
 
         $widgetContext = [
             'backend_url' => (string) $honkersConfig['backend_url'],
-            'site_key' => (string) $honkersConfig['widget']['site_key'],
             'widget_cdn_url' => (string) $honkersConfig['widget']['cdn_url'],
+            'defer' => (bool) $honkersConfig['widget']['defer'],
         ];
 
         $hasTwigHooks = $container->hasExtension('sylius_twig_hooks');
@@ -150,7 +150,7 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
     }
 
     /**
-     * @param array<string, string> $widgetContext
+     * @param array<string, string|bool> $widgetContext
      */
     private function prependWidgetHook(ContainerBuilder $container, array $widgetContext): void
     {
@@ -179,7 +179,7 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
     }
 
     /**
-     * @param array<string, string> $widgetContext
+     * @param array<string, string|bool> $widgetContext
      */
     private function prependWidgetTemplateBlock(ContainerBuilder $container, array $widgetContext): void
     {
@@ -210,7 +210,7 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
 
     private function getWidgetTemplate(): string
     {
-        return '@FluffyDiscordSyliusHonkers/shop/widget.html.twig';
+        return '@FluffyDiscordSyliusHonkersPlugin/shop/widget.html.twig';
     }
 
     private function getHonkersConfigAlias(): string
@@ -219,7 +219,7 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
     }
 
     /**
-     * @return array{backend_url: string, widget: array{enabled: bool, site_key: string, cdn_url: string}}
+     * @return array{backend_url: string, widget: array{enabled: bool, cdn_url: string, defer: bool}}
      */
     private function mergeHonkersConfig(ContainerBuilder $container): array
     {
@@ -227,8 +227,8 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
             'backend_url' => '',
             'widget' => [
                 'enabled' => true,
-                'site_key' => '',
                 'cdn_url' => '',
+                'defer' => true,
             ],
         ];
 
@@ -236,7 +236,7 @@ class FluffyDiscordSyliusHonkersBundle extends AbstractBundle
             if (isset($rawConfig['backend_url'])) {
                 $mergedConfig['backend_url'] = $rawConfig['backend_url'];
             }
-            foreach (['enabled', 'site_key', 'cdn_url'] as $key) {
+            foreach (['enabled', 'cdn_url', 'defer'] as $key) {
                 if (isset($rawConfig['widget'][$key])) {
                     $mergedConfig['widget'][$key] = $rawConfig['widget'][$key];
                 }

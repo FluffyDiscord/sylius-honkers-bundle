@@ -2,16 +2,17 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\EventListener;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\EventListener;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\SiteKeyResolver;
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusHonkersBundle\EventListener\CatalogChangeListener;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersPlugin\EventListener\CatalogChangeListener;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChannelCredentialsProviderDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\RecordingCatalogChangeNotifier;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Sylius\Component\Channel\Repository\ChannelRepositoryInterface;
@@ -36,7 +37,7 @@ class CatalogChangeListenerTest extends TestCase
 
     private function createNotifier(): RecordingCatalogChangeNotifier
     {
-        $siteKeyResolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), 'site-key', []);
+        $siteKeyResolver = new SiteKeyResolver($this->createStub(ChannelRepositoryInterface::class), new ChannelCredentialsProviderDouble(), []);
 
         return new RecordingCatalogChangeNotifier($siteKeyResolver);
     }

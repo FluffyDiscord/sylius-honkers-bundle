@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tool;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tool;
 
 use FluffyDiscord\Honkers\Contract\ChatbotToolInterface;
 use FluffyDiscord\Honkers\DTO\ContentItem;
@@ -13,7 +13,7 @@ use FluffyDiscord\Honkers\DTO\ToolDefinition;
 use FluffyDiscord\Honkers\DTO\ToolResult;
 use FluffyDiscord\Honkers\DTO\ToolUiHints;
 use FluffyDiscord\Honkers\Enum\FormFieldType;
-use FluffyDiscord\SyliusHonkersBundle\Tool\DTO\OrderStatusArguments;
+use FluffyDiscord\SyliusHonkersPlugin\Tool\DTO\OrderStatusArguments;
 use Sylius\Component\Core\Model\OrderInterface;
 use Sylius\Component\Core\Model\ShipmentInterface;
 use Sylius\Component\Core\Repository\OrderRepositoryInterface;

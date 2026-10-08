@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Product;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Product;
 
 use Doctrine\Common\Collections\ArrayCollection;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
-use FluffyDiscord\SyliusHonkersBundle\Product\ProductViewFactory;
-use FluffyDiscord\SyliusHonkersBundle\Product\VariantPriceResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelUrlGenerator;
+use FluffyDiscord\SyliusHonkersPlugin\Product\ProductViewFactory;
+use FluffyDiscord\SyliusHonkersPlugin\Product\VariantPriceResolver;
 use Liip\ImagineBundle\Imagine\Cache\CacheManager;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;

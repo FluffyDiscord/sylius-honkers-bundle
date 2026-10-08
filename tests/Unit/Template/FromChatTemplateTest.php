@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Template;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Template;
 
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ChatAttributedOrder;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\HookableMetadataDouble;
-use FluffyDiscord\SyliusHonkersBundle\Twig\ChatClickExtension;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ChatAttributedOrder;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\HookableMetadataDouble;
+use FluffyDiscord\SyliusHonkersPlugin\Twig\ChatClickExtension;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Core\Model\Order;

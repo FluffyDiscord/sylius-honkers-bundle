@@ -1,5 +1,5 @@
 {% set widget = hookable_metadata is defined ? hookable_metadata.context : _context %}
-{% set siteKey = fluffydiscord_chatbot_site_key(widget.site_key) %}
+{% set siteKey = fluffydiscord_chatbot_site_key() %}
 {% if siteKey %}
-{{ fluffydiscord_chatbot_widget_markup(widget.backend_url, siteKey, widget.widget_cdn_url ?? '', app.locale) }}
+{{ fluffydiscord_chatbot_widget_markup(widget.backend_url, siteKey, widget.widget_cdn_url ?? '', app.locale, widget.defer ?? true) }}
 {% endif %}

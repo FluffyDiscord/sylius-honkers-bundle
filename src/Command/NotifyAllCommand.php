@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Command;
+namespace FluffyDiscord\SyliusHonkersPlugin\Command;
 
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusHonkersBundle\Channel\SiteKeyResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Credentials\ChannelCredentialsProviderInterface;
 use FluffyDiscord\Honkers\Contract\ChatbotDataSourceInterface;
 use FluffyDiscord\Honkers\Contract\ChatbotLocaleContextInterface;
 use FluffyDiscord\Honkers\DTO\SourceQuery;
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
 use FluffyDiscord\Honkers\Exception\ChatbotApiException;
-use FluffyDiscord\SyliusHonkersBundle\Exception\InvalidChannelException;
+use FluffyDiscord\SyliusHonkersPlugin\Exception\InvalidChannelException;
 use FluffyDiscord\Honkers\Exception\InvalidLocaleException;
-use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersPlugin\Ingest\CatalogChangeNotifier;
 use FluffyDiscord\Honkers\Locale\LocaleMatcher;
 use FluffyDiscord\Honkers\Registry\DataSourceRegistry;
 use Sylius\Component\Core\Model\ChannelInterface;
@@ -31,12 +31,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class NotifyAllCommand extends Command
 {
     public function __construct(
-        private readonly DataSourceRegistry            $dataSourceRegistry,
-        private readonly CatalogChangeNotifier         $catalogChangeNotifier,
-        private readonly ChannelResolver               $channelResolver,
-        private readonly ChatbotLocaleContextInterface $localeContext,
-        private readonly LocaleMatcher                 $localeMatcher,
-        private readonly SiteKeyResolver               $siteKeyResolver,
+        private readonly DataSourceRegistry                  $dataSourceRegistry,
+        private readonly CatalogChangeNotifier               $catalogChangeNotifier,
+        private readonly ChannelResolver                     $channelResolver,
+        private readonly ChatbotLocaleContextInterface       $localeContext,
+        private readonly LocaleMatcher                       $localeMatcher,
+        private readonly ChannelCredentialsProviderInterface $credentialsProvider,
     ) {
         parent::__construct();
     }
@@ -85,7 +85,7 @@ class NotifyAllCommand extends Command
         $this->channelResolver->setOverrideCode($channel);
 
         try {
-            $notifiedChannel = $this->resolveNotifiedChannel();
+            $notifiedChannel = $this->channelResolver->getChannel();
             $channelRefusal = $this->findChannelRefusal($notifiedChannel);
             if ($channelRefusal !== null) {
                 $io->error($channelRefusal);
@@ -93,9 +93,8 @@ class NotifyAllCommand extends Command
                 return Command::FAILURE;
             }
 
-            $channelCode = $notifiedChannel?->getCode();
             $requestedLocale = $this->resolveRequestedLocale($locale);
-            $failedBatchCount = $this->notifySources($io, $sources, $requestedLocale, $channelCode);
+            $failedBatchCount = $this->notifySources($io, $sources, $requestedLocale, $notifiedChannel);
         } catch (InvalidChannelException $exception) {
             $io->error(sprintf(
                 'No channel could be resolved (%s). Pass --channel=<code> when running outside a web request.',
@@ -125,25 +124,8 @@ class NotifyAllCommand extends Command
         return 2;
     }
 
-    /**
-     * @throws InvalidChannelException
-     */
-    private function resolveNotifiedChannel(): ?ChannelInterface
+    private function findChannelRefusal(ChannelInterface $channel): ?string
     {
-        $hasChannelSiteKeys = $this->siteKeyResolver->hasChannelSiteKeys();
-        if (!$hasChannelSiteKeys) {
-            return null;
-        }
-
-        return $this->channelResolver->getChannel();
-    }
-
-    private function findChannelRefusal(?ChannelInterface $channel): ?string
-    {
-        if ($channel === null) {
-            return null;
-        }
-
         $channelCode = (string) $channel->getCode();
 
         $isEnabled = $channel->isEnabled();
@@ -151,11 +133,19 @@ class NotifyAllCommand extends Command
             return sprintf('The channel "%s" is disabled, its catalog is not announced.', $channelCode);
         }
 
-        $siteKey = $this->siteKeyResolver->getSiteKey($channelCode);
-        if ($siteKey === '') {
+        $siteCredentials = $this->credentialsProvider->findForChannel($channel);
+        if ($siteCredentials === null) {
             return sprintf(
-                'The channel "%s" has no site key, nothing can be announced. Set: channel_site_keys.%s or widget.site_key.',
+                'The channel "%s" has no site key, nothing can be announced. Pair it from the chatbot dashboard or set: channel_site_keys.%s or CHATBOT_SITE_KEY.',
                 $channelCode,
+                $channelCode,
+            );
+        }
+
+        $hasIngestSecret = $siteCredentials->hasIngestSecret();
+        if (!$hasIngestSecret) {
+            return sprintf(
+                'The channel "%s" has no ingest secret, nothing can be announced. Pair it from the chatbot dashboard or set: CHATBOT_INGEST_SECRET.',
                 $channelCode,
             );
         }
@@ -171,7 +161,7 @@ class NotifyAllCommand extends Command
     /**
      * @param list<CatalogSourceName> $sources
      */
-    private function notifySources(SymfonyStyle $io, array $sources, ?string $locale, ?string $channelCode): int
+    private function notifySources(SymfonyStyle $io, array $sources, ?string $locale, ChannelInterface $channel): int
     {
         $failedBatchCount = 0;
         foreach ($sources as $source) {
@@ -184,7 +174,7 @@ class NotifyAllCommand extends Command
 
             foreach ($this->resolveLocales($dataSource, $locale) as $localeCode) {
                 try {
-                    $failedBatchCount += $this->notifyLocale($io, $source, $dataSource, $localeCode, $channelCode);
+                    $failedBatchCount += $this->notifyLocale($io, $source, $dataSource, $localeCode, $channel);
                 } catch (ChatbotApiException $exception) {
                     $io->error(sprintf('%s: %s', $source->value, $exception->getMessage()));
                     ++$failedBatchCount;
@@ -202,7 +192,7 @@ class NotifyAllCommand extends Command
         CatalogSourceName $source,
         ChatbotDataSourceInterface $dataSource,
         string $locale,
-        ?string $channelCode,
+        ChannelInterface $channel,
     ): int {
         $batchSize = $this->catalogChangeNotifier->getMaxExternalIdsPerRequest();
         $externalIds = [];
@@ -219,7 +209,7 @@ class NotifyAllCommand extends Command
                     continue;
                 }
 
-                $failedBatchCount += $this->sendBatch($io, $source, $locale, $externalIds, $channelCode);
+                $failedBatchCount += $this->sendBatch($io, $source, $locale, $externalIds, $channel);
                 $notifiedCount += count($externalIds);
                 $externalIds = [];
             }
@@ -228,7 +218,7 @@ class NotifyAllCommand extends Command
         } while ($cursor !== null);
 
         if ($externalIds !== []) {
-            $failedBatchCount += $this->sendBatch($io, $source, $locale, $externalIds, $channelCode);
+            $failedBatchCount += $this->sendBatch($io, $source, $locale, $externalIds, $channel);
             $notifiedCount += count($externalIds);
         }
 
@@ -245,12 +235,12 @@ class NotifyAllCommand extends Command
         CatalogSourceName $source,
         string $locale,
         array $externalIds,
-        ?string $channelCode,
+        ChannelInterface $channel,
     ): int {
         $remainingRetries = $this->getMaxThrottleRetries();
 
         while (true) {
-            $outcome = $this->catalogChangeNotifier->notify($source, $locale, $externalIds, $channelCode);
+            $outcome = $this->catalogChangeNotifier->notify($source, $locale, $externalIds, $channel);
             if ($outcome->accepted) {
                 sleep($this->getBatchPauseSeconds());
 

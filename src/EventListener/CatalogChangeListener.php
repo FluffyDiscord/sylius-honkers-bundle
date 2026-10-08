@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\EventListener;
+namespace FluffyDiscord\SyliusHonkersPlugin\EventListener;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PostPersistEventArgs;
@@ -10,7 +10,7 @@ use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Events;
 use FluffyDiscord\Honkers\Enum\CatalogSourceName;
-use FluffyDiscord\SyliusHonkersBundle\Ingest\CatalogChangeNotifier;
+use FluffyDiscord\SyliusHonkersPlugin\Ingest\CatalogChangeNotifier;
 use Psr\Log\LoggerInterface;
 use Sylius\Component\Core\Model\ChannelPricingInterface;
 use Sylius\Component\Locale\Provider\LocaleCollectionProviderInterface;

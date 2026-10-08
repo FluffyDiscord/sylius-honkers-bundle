@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tool;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tool;
 
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
 use FluffyDiscord\Honkers\Contract\ChatbotToolInterface;
 use FluffyDiscord\Honkers\DTO\ContentItem;
-use FluffyDiscord\SyliusHonkersBundle\DTO\ProductsBlock;
+use FluffyDiscord\SyliusHonkersPlugin\DTO\ProductsBlock;
 use FluffyDiscord\Honkers\DTO\ToolCallContext;
 use FluffyDiscord\Honkers\DTO\ToolDefinition;
 use FluffyDiscord\Honkers\DTO\ToolResult;
-use FluffyDiscord\SyliusHonkersBundle\Product\ProductViewFactory;
-use FluffyDiscord\SyliusHonkersBundle\Tool\DTO\ProductAvailabilityArguments;
+use FluffyDiscord\SyliusHonkersPlugin\Product\ProductViewFactory;
+use FluffyDiscord\SyliusHonkersPlugin\Tool\DTO\ProductAvailabilityArguments;
 use Sylius\Component\Core\Model\ProductVariantInterface;
 use Sylius\Component\Core\Repository\ProductVariantRepositoryInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;

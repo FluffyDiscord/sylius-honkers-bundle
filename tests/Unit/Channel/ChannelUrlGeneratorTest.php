@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Channel;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Channel;
 
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelUrlGenerator;
 use PHPUnit\Framework\TestCase;
 use Sylius\Component\Core\Model\ChannelInterface;
 use Symfony\Component\Routing\RequestContext;

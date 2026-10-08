@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Contract;
+namespace FluffyDiscord\SyliusHonkersPlugin\Contract;
 
 use Sylius\Component\Core\Model\ChannelInterface;
 use Sylius\Component\Taxonomy\Model\TaxonInterface;

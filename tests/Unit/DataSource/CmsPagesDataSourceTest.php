@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace FluffyDiscord\SyliusHonkersBundle\Tests\Unit\DataSource;
+namespace FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\DataSource;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
@@ -11,12 +11,12 @@ use MonsieurBiz\SyliusCmsPagePlugin\Entity\Page;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\PageInterface;
 use MonsieurBiz\SyliusCmsPagePlugin\Entity\PageTranslationInterface;
 use MonsieurBiz\SyliusCmsPagePlugin\Repository\PageRepository;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelResolver;
-use FluffyDiscord\SyliusHonkersBundle\Channel\ChannelUrlGenerator;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelResolver;
+use FluffyDiscord\SyliusHonkersPlugin\Channel\ChannelUrlGenerator;
 use FluffyDiscord\Honkers\Cursor\CursorCodec;
-use FluffyDiscord\SyliusHonkersBundle\DataSource\CmsPagesDataSource;
+use FluffyDiscord\SyliusHonkersPlugin\DataSource\CmsPagesDataSource;
 use FluffyDiscord\Honkers\DTO\SourceQuery;
-use FluffyDiscord\SyliusHonkersBundle\Tests\Unit\Fixtures\ThrowingHtmlToText;
+use FluffyDiscord\SyliusHonkersPlugin\Tests\Unit\Fixtures\ThrowingHtmlToText;
 use FluffyDiscord\Honkers\Text\HtmlToText;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -87,10 +87,7 @@ class CmsPagesDataSourceTest extends TestCase
     private function createRichEditor(): RichEditorExtension
     {
         $loader = new FilesystemLoader();
-        $loader->addPath(
-            dirname(__DIR__, 3) . '/vendor/monsieurbiz/sylius-rich-editor-plugin/src/Resources/views',
-            'MonsieurBizSyliusRichEditorPlugin',
-        );
+        $loader->addPath($this->getRichEditorViewsDirectory(), 'MonsieurBizSyliusRichEditorPlugin');
         $twig = new Environment($loader, ['strict_variables' => true]);
         $app = new AppVariable();
         $app->setRequestStack(new RequestStack());
@@ -113,14 +110,33 @@ class CmsPagesDataSourceTest extends TestCase
         return $richEditor;
     }
 
+    private function getRichEditorViewsDirectory(): string
+    {
+        return dirname(__DIR__, 3) . '/vendor/monsieurbiz/sylius-rich-editor-plugin/src/Resources/views';
+    }
+
+    private function getUiElementDirectory(string $area): string
+    {
+        $sylius2Directory = $area . '/ui_element';
+        $isSylius2Layout = is_dir($this->getRichEditorViewsDirectory() . '/' . $sylius2Directory);
+        if ($isSylius2Layout) {
+            return $sylius2Directory;
+        }
+
+        return ucfirst($area) . '/UiElement';
+    }
+
     private function createUiElement(string $code, string $frontTemplate): UiElement
     {
+        $adminDirectory = $this->getUiElementDirectory('admin');
+        $shopDirectory = $this->getUiElementDirectory('shop');
+
         $uiElement = new UiElement();
         $uiElement->setMetadata(Metadata::fromCodeAndConfiguration($code, [
             'classes' => ['form' => 'unused'],
             'templates' => [
-                'admin_render' => '@MonsieurBizSyliusRichEditorPlugin/admin/ui_element/html.html.twig',
-                'front_render' => '@MonsieurBizSyliusRichEditorPlugin/shop/ui_element/' . $frontTemplate,
+                'admin_render' => '@MonsieurBizSyliusRichEditorPlugin/' . $adminDirectory . '/html.html.twig',
+                'front_render' => '@MonsieurBizSyliusRichEditorPlugin/' . $shopDirectory . '/' . $frontTemplate,
             ],
             'enabled' => true,
         ]));
