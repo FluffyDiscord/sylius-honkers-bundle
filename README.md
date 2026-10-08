@@ -315,8 +315,9 @@ time, max 500 ids per request.
 - Channel mapped to `''` → skipped, debug record.
 - Locale no enabled channel serves → sent nowhere.
 - `backend_url` empty → nothing sent.
-- Backend fails → logged warning; the shop request is never affected. A dropped notification costs at most one
-  nightly sync of staleness.
+- Backend asks to retry within 2 s (rate limit) → the batch is sent once more.
+- Backend fails or can't queue for longer → logged warning; the shop request is never affected. A dropped
+  notification costs at most one nightly sync of staleness.
 
 ### Re-announce everything
 
@@ -324,8 +325,8 @@ time, max 500 ids per request.
 bin/console fluffydiscord:chatbot:notify-all [--source=products|categories|cms_pages] [--locale=cs_CZ] [--channel=code]
 ```
 
-Re-announces the whole catalog of one channel to its site in 500-id batches, pausing 2 s between batches and
-honouring `Retry-After` on a 429.
+Re-announces the whole catalog of one channel to its site in 500-id batches, pausing 2 s between batches.
+A `429` or `503` → waits `Retry-After` and sends the same batch again, up to 5 times.
 
 - **Pass `--channel` when no channel can be resolved from the CLI context.** Run it once per channel.
 - Disabled channel, or one without a site key or ingest secret → aborts.

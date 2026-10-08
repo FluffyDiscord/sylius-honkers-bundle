@@ -476,6 +476,49 @@ class CatalogChangeNotifierTest extends TestCase
         self::assertSame(300, $outcome->retryAfterSeconds);
     }
 
+    public function testAnUnavailableBackendIsReportedAsThrottledSoNotifyAllWaits(): void
+    {
+        $notifier = $this->createNotifier([
+            new MockResponse('', ['http_code' => 503, 'response_headers' => ['Retry-After' => '60']]),
+        ]);
+
+        $outcome = $notifier->notify(CatalogSourceName::Products, 'cs_CZ', ['T-SHIRT-01']);
+
+        self::assertFalse($outcome->accepted);
+        self::assertSame(60, $outcome->retryAfterSeconds);
+    }
+
+    public function testFlushSendsAShortThrottledBatchAgain(): void
+    {
+        $notifier = $this->createNotifier([
+            new MockResponse('', ['http_code' => 429, 'response_headers' => ['Retry-After' => '0']]),
+            new MockResponse('', ['http_code' => 202]),
+        ]);
+
+        $notifier->collect(CatalogSourceName::Products, 'cs_CZ', 'T-SHIRT-01');
+        $notifier->flush();
+
+        self::assertCount(2, $this->capturedRequests);
+        self::assertSame($this->capturedRequests[0]['options']['body'], $this->capturedRequests[1]['options']['body']);
+        self::assertSame([], $this->logger->records);
+    }
+
+    public function testFlushLogsABatchTheBackendCannotQueueForLong(): void
+    {
+        $notifier = $this->createNotifier([
+            new MockResponse('', ['http_code' => 503, 'response_headers' => ['Retry-After' => '60']]),
+        ]);
+
+        $notifier->collect(CatalogSourceName::Products, 'cs_CZ', 'T-SHIRT-01');
+        $notifier->flush();
+
+        self::assertCount(1, $this->capturedRequests);
+        self::assertSame(
+            ['Chatbot: the backend could not queue the catalog changes now; the nightly sync picks them up.'],
+            array_column($this->logger->records, 'message'),
+        );
+    }
+
     public function testTransportFailureIsSwallowed(): void
     {
         $notifier = $this->createNotifier([new MockResponse('', ['error' => 'connection refused'])]);

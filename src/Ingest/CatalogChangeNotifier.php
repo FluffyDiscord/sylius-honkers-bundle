@@ -47,6 +47,11 @@ class CatalogChangeNotifier implements ResetInterface
         return 20000;
     }
 
+    public function getMaxFlushRetryWaitSeconds(): int
+    {
+        return 2;
+    }
+
     /**
      * @return list<string>
      */
@@ -166,9 +171,36 @@ class CatalogChangeNotifier implements ResetInterface
             $batches = array_chunk($externalIds, $maxExternalIds);
             foreach ($siteKeyRouting->getSiteCredentials($change['locale']) as $siteCredentials) {
                 foreach ($batches as $batch) {
-                    $this->sendToSite($change['source'], $change['locale'], $batch, $siteCredentials);
+                    $this->flushBatch($change['source'], $change['locale'], $batch, $siteCredentials);
                 }
             }
+        }
+    }
+
+    /**
+     * @param list<string> $externalIds
+     */
+    private function flushBatch(
+        CatalogSourceName $source,
+        string $locale,
+        array $externalIds,
+        SiteCredentials $siteCredentials,
+    ): void {
+        $result = $this->sendToSite($source, $locale, $externalIds, $siteCredentials);
+        $retryAfterSeconds = $result->retryAfterSeconds;
+        if ($retryAfterSeconds === null) {
+            return;
+        }
+
+        $isShortWait = $retryAfterSeconds <= $this->getMaxFlushRetryWaitSeconds();
+        if ($isShortWait) {
+            sleep($retryAfterSeconds);
+            $result = $this->sendToSite($source, $locale, $externalIds, $siteCredentials);
+        }
+
+        $isStillThrottled = $result->isThrottled();
+        if ($isStillThrottled) {
+            $this->logThrottled($source, $locale, $siteCredentials->siteKey, $result->retryAfterSeconds);
         }
     }
 
@@ -282,6 +314,14 @@ class CatalogChangeNotifier implements ResetInterface
         $this->logger->warning('Chatbot: notifying the backend about catalog changes failed.', [
             'target' => $source->value . ' / ' . $locale . ' / ' . $siteKey,
             'exception' => $exception,
+        ]);
+    }
+
+    private function logThrottled(CatalogSourceName $source, string $locale, string $siteKey, ?int $retryAfterSeconds): void
+    {
+        $this->logger->warning('Chatbot: the backend could not queue the catalog changes now; the nightly sync picks them up.', [
+            'target' => $source->value . ' / ' . $locale . ' / ' . $siteKey,
+            'retryAfterSeconds' => $retryAfterSeconds,
         ]);
     }
 
